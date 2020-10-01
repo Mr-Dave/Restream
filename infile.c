@@ -8,47 +8,6 @@
 #include "writer.h"
 
 
-int infile_init_decoder(ctx_restream *restrm, int stream_index){
-    /* Simple routine to fill decoder and get a video packet */
-    int retcd;
-
-    if (finish) return -1;
-
-    snprintf(restrm->function_name,1024,"%s: infile_init_decoder %d"
-        ,restrm->guide_info->guide_displayname, stream_index);
-    restrm->watchdog_playlist = av_gettime_relative() + 5000000;
-
-    av_packet_unref(&restrm->pkt);
-    av_init_packet(&restrm->pkt);
-    restrm->pkt.data = NULL;
-    restrm->pkt.size = 0;
-
-    retcd = av_read_frame(restrm->ifmt_ctx, &restrm->pkt);
-    if (retcd == AVERROR_EOF) return retcd;
-
-    if (retcd == 0 ) {
-        retcd = avcodec_send_packet(
-            restrm->stream_ctx[stream_index].dec_ctx
-            , &restrm->pkt);
-    }
-    restrm->frame_in = av_frame_alloc();
-    if (retcd == 0 ) {
-        retcd = avcodec_receive_frame(
-            restrm->stream_ctx[stream_index].dec_ctx
-            , restrm->frame_in);
-    }
-    if (retcd == AVERROR(EAGAIN) || retcd == AVERROR_EOF) {
-        /* The frame is not ready to be consumed.  Return normal*/
-        av_frame_free(&restrm->frame_in);
-        return 0;
-    }
-    restrm->dts_frame = restrm->frame_in->pkt_dts;
-    av_frame_free(&restrm->frame_in);
-
-    return 0;
-
-}
-
 int infile_init(ctx_restream *restrm){
 
     int retcd;
@@ -167,69 +126,24 @@ int infile_init(ctx_restream *restrm){
             restrm->watchdog_playlist = av_gettime_relative() + 5000000;
 
             retcd = av_read_frame(restrm->ifmt_ctx, &restrm->pkt);
-            while (((restrm->pkt.stream_index != stream_index) ||
-                    (restrm->pkt.dts == AV_NOPTS_VALUE)) &&
-                   (retcd == 0)) {
-                retcd = infile_init_decoder(restrm,stream_index);
-            }
-            if (retcd != 0){
-                fprintf(stderr, "%s: Failed to find dts #%d\n"
+            if (retcd < 0){
+                fprintf(stderr, "%s: Failed to read first packet %d\n"
                     ,restrm->guide_info->guide_displayname, stream_index);
                 return -1;
             }
 
-            snprintf(restrm->function_name,1024,"%s","infile_init 05");
-            restrm->watchdog_playlist = av_gettime_relative() + 5000000;
-
-            /* Now get a valid DTS from the decoder
-             * We need to initialize the decoder so that
-             * in later steps we can get a pixel format.
-            */
-            restrm->dts_start = restrm->pkt.dts;
-            while (((restrm->pkt.stream_index != stream_index) ||
-                    (restrm->dts_start < restrm->dts_frame)) &&
-                   (retcd == 0)) {
-                retcd = infile_init_decoder(restrm,stream_index);
+            if (restrm->pkt.dts == AV_NOPTS_VALUE) {
+                restrm->dts_start = 0;
+            } else {
+                restrm->dts_start = av_rescale(restrm->pkt.dts, 1000000
+                    ,restrm->ifmt_ctx->streams[restrm->pkt.stream_index]->time_base.den);
             }
-            if (retcd != 0){
-                fprintf(stderr, "%s: Failed to find dts #%d\n"
-                    ,restrm->guide_info->guide_displayname, stream_index);
-                FILE *f_nodts;
-                f_nodts = fopen("no_dts.log","a");
-                    fputs(restrm->in_filename, f_nodts);
-                    fputs("\n", f_nodts);
-                fclose(f_nodts);
-                return -1;
-            }
-
-            snprintf(restrm->function_name,1024,"%s","infile_init 06");
-            restrm->watchdog_playlist = av_gettime_relative() + 5000000;
 
             restrm->time_start = av_gettime_relative();
-            restrm->dts_start = av_rescale(restrm->pkt.dts, 1000000
-                ,restrm->ifmt_ctx->streams[restrm->pkt.stream_index]->time_base.den);
             restrm->dts_last = restrm->dts_start;
 
             snprintf(restrm->function_name,1024,"%s","infile_init 07");
             restrm->watchdog_playlist = av_gettime_relative() + 5000000;
-
-            /* If we still do not have a pix fmt, read more to fill decoder*/
-            if (codec_ctx->codec_type == AVMEDIA_TYPE_VIDEO){
-                snprintf(restrm->function_name,1024,"%s","infile_init 08");
-                restrm->watchdog_playlist = av_gettime_relative() + 5000000;
-
-                while (((restrm->pkt.stream_index != stream_index) ||
-                        (restrm->stream_ctx[stream_index].dec_ctx->pix_fmt == -1)) &&
-                       (retcd == 0)) {
-                    retcd = infile_init_decoder(restrm,stream_index);
-                }
-                if (retcd != 0){
-                    fprintf(stderr, "%s: Failed to find pixel format #%d\n"
-                        ,restrm->guide_info->guide_displayname, stream_index);
-                    return -1;
-                }
-
-            }
         }
 
         stream_index ++;

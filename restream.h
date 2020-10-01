@@ -90,8 +90,6 @@
         AVFormatContext         *ofmt_ctx;
         AVOutputFormat          *ofmt;
         AVPacket                pkt;
-        AVFrame                 *frame_in;
-        AVFrame                 *frame_out;
 
         int                     stream_index;
         int                     audio_index;
@@ -102,7 +100,6 @@
         int64_t                 time_start;
         int64_t                 dts_start;
         int64_t                 dts_last;
-        int64_t                 dts_frame;
 
         struct playlist_item    *playlist;
         char                    *playlist_dir;
