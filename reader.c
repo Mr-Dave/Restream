@@ -15,19 +15,21 @@ void *reader(void *parms){
     int pipefd_r;
     char *byte_buffer[4096];
     int reader_active;
+    ssize_t bytes_read;
     ctx_restream *restrm = parms;
-    ssize_t rdrslt;
 
     pthread_setname_np(pthread_self(), "OutputReader");
 
     snprintf(restrm->function_name,1024,"%s","reader");
 
     thread_count++;
-    //fprintf(stderr, "%s: Output reader started %d\n"
+    //fprintf(stderr, "%s: reader started %d\n"
     //    ,restrm->guide_info->guide_displayname,thread_count);
 
     pipefd_r = 0;
     reader_active = TRUE;
+    restrm->reader_action=READER_ACTION_CLOSE;
+
     while (reader_active){
         switch(restrm->reader_action) {
         case READER_ACTION_START:
@@ -68,10 +70,8 @@ void *reader(void *parms){
         }
 
         if ((restrm->reader_status == READER_STATUS_READING) && (pipefd_r != 0) ){
-            rdrslt=read(pipefd_r, byte_buffer, sizeof(byte_buffer));
-            if (rdrslt < 0) {
-                fprintf(stderr, "%s: Error reading from pipe \n",restrm->guide_info->guide_displayname);
-            }
+            bytes_read=read(pipefd_r, byte_buffer, sizeof(byte_buffer));
+            (void)bytes_read;
         } else {
             SLEEP(1,0);
         }
@@ -81,7 +81,7 @@ void *reader(void *parms){
 
     thread_count--;
 
-    //fprintf(stderr, "%s: Output reader exit %d\n"
+    //fprintf(stderr, "%s: reader exit %d\n"
     //    ,restrm->guide_info->guide_displayname,thread_count);
 
     restrm->reader_status = READER_STATUS_INACTIVE;
@@ -116,6 +116,8 @@ void reader_end(ctx_restream *restrm){
         while (restrm->reader_status != READER_STATUS_INACTIVE);
     pthread_mutex_unlock(&restrm->mutex_reader);
 
+    pthread_mutex_destroy(&restrm->mutex_reader);
+
 }
 
 void reader_flush(ctx_restream *restrm){
@@ -134,8 +136,10 @@ void reader_init(ctx_restream *restrm){
 
     snprintf(restrm->function_name,1024,"%s","reader_init");
 
-    //fprintf(stderr,"%s: Output Reader Init %d\n"
+    //fprintf(stderr,"%s: reader_init entry %d\n"
     //    ,restrm->guide_info->guide_displayname,thread_count);
+
+    pthread_mutex_init(&restrm->mutex_reader, NULL);
 
     pthread_attr_t handler_attribute;
 
@@ -149,5 +153,8 @@ void reader_init(ctx_restream *restrm){
     pthread_attr_destroy(&handler_attribute);
 
     reader_close(restrm);
+
+    //fprintf(stderr,"%s: reader_init exit %d\n"
+    //    ,restrm->guide_info->guide_displayname,thread_count);
 
 }

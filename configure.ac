@@ -26,7 +26,7 @@ TEMP_CFLAGS="-D_THREAD_SAFE"
 LIBS="$LIBS -pthread "
 
 ##############################################################################
-###  Check for ffmpeg 
+###  Check for ffmpeg
 ##############################################################################
 FFMPEG_VER="--"
 AC_ARG_WITH([ffmpeg],
@@ -49,7 +49,7 @@ AS_IF([test "${FFMPEG}" = "no"], [
     export PKG_CONFIG_PATH
     AC_MSG_RESULT($PKG_CONFIG_PATH)
 
-    FFMPEG_DEPS="libavdevice libavformat libavfilter libavcodec libswresample libswscale libavutil"
+    FFMPEG_DEPS="libavdevice libavformat libavcodec libswresample libswscale libavutil"
     AC_MSG_CHECKING(for FFmpeg)
     AS_IF([pkg-config $FFMPEG_DEPS], [
         FFMPEG_VER=`pkg-config --modversion libavformat`

@@ -61,25 +61,10 @@
         READER_ACTION_END
     };
 
-    typedef struct FilteringContext {
-        AVFilterContext *buffersink_ctx;
-        AVFilterContext *buffersrc_ctx;
-        AVFilterGraph *filter_graph;
-    } FilteringContext;
-
     typedef struct StreamContext {
         AVCodecContext      *dec_ctx;
         AVCodecContext      *enc_ctx;
-        struct SwsContext   *sws_ctx;
     } StreamContext;
-
-    /*********************************************************
-    struct playlist_item {
-        char   *movie_path;
-        int    path_length;
-        int    movie_seq;
-    };
-    */
 
     struct guide_item {
         char   *movie1_filename;
@@ -97,15 +82,6 @@
         char   time2_en[25];
 
     };
-    /*
-    struct channel_item {
-        char         *channel_dir;
-        char         *channel_pipe;
-        char         *channel_order;
-        int          channel_status;
-        pthread_t    process_channel_thread;
-    };
-    */
 
     typedef struct ctx_restream {
         char                    *in_filename;
@@ -114,28 +90,23 @@
         AVFormatContext         *ofmt_ctx;
         AVOutputFormat          *ofmt;
         AVPacket                pkt;
-        AVPacket                enc_pkt;
         AVFrame                 *frame_in;
         AVFrame                 *frame_out;
-        int                     got_frame;
 
         int                     stream_index;
         int                     audio_index;
         int                     video_index;
         StreamContext           *stream_ctx;
         int                     stream_count;
-        FilteringContext        *filter_ctx;
+
         int64_t                 time_start;
         int64_t                 dts_start;
         int64_t                 dts_last;
         int64_t                 dts_frame;
-        int64_t                 time_den;
-        int64_t                 dts_max;
-        int64_t                 dts_base;
 
         struct playlist_item    *playlist;
         char                    *playlist_dir;
-        char                    *function_name;  //obsolete
+        char           *function_name;
         int                     finish;
         int                     playlist_count;
         int                     playlist_index;
@@ -143,9 +114,9 @@
 
         struct guide_item       *guide_info;
 
-        enum PIPE_STATUS       pipe_state;
-        enum READER_STATUS     reader_status;
-        enum READER_ACTION     reader_action;
+        volatile enum PIPE_STATUS       pipe_state;
+        volatile enum READER_STATUS     reader_status;
+        volatile enum READER_ACTION     reader_action;
 
         int64_t                watchdog_reader;
         int64_t                watchdog_playlist;

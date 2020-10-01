@@ -105,7 +105,6 @@ int infile_init(ctx_restream *restrm){
     while (stream_index < restrm->ifmt_ctx->nb_streams){
         restrm->stream_ctx[stream_index].dec_ctx = NULL;
         restrm->stream_ctx[stream_index].enc_ctx = NULL;
-        restrm->stream_ctx[stream_index].sws_ctx = NULL;
         stream_index++;
     }
 
@@ -139,7 +138,6 @@ int infile_init(ctx_restream *restrm){
         if (codec_ctx->codec_type == AVMEDIA_TYPE_VIDEO ||
             codec_ctx->codec_type == AVMEDIA_TYPE_AUDIO) {
             if (codec_ctx->codec_type == AVMEDIA_TYPE_VIDEO){
-                restrm->time_den = restrm->ifmt_ctx->streams[stream_index]->time_base.den;
                 codec_ctx->framerate = av_guess_frame_rate(restrm->ifmt_ctx, stream, NULL);
                 restrm->video_index = stream_index;
             }
@@ -264,39 +262,13 @@ void infile_close(ctx_restream *restrm){
     //        ,restrm->guide_info->guide_displayname);
 }
 
-void infile_rescale_pkt(ctx_restream *restrm){
-    int64_t base_tmp, max_tmp;
-
-    base_tmp = av_rescale_q_rnd(restrm->dts_base
-        , (AVRational){1, 1000}
-        , restrm->ifmt_ctx->streams[restrm->pkt.stream_index]->time_base
-        , AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
-    max_tmp = av_rescale_q_rnd(restrm->dts_max
-        , (AVRational){1, 1000}
-        , restrm->ifmt_ctx->streams[restrm->pkt.stream_index]->time_base
-        , AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
-
-    if (restrm->pkt.pts != AV_NOPTS_VALUE) {
-        restrm->pkt.pts += base_tmp;
-    }
-
-    if (restrm->pkt.dts != AV_NOPTS_VALUE) {
-        restrm->pkt.dts += base_tmp;
-        if (max_tmp < restrm->pkt.dts){
-            restrm->dts_max = av_rescale_q_rnd(restrm->pkt.dts
-                , restrm->ifmt_ctx->streams[restrm->pkt.stream_index]->time_base
-                , (AVRational){1, 1000}
-                , AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
-        }
-    }
-
-}
-
 void infile_wait(ctx_restream *restrm){
 
     int64_t tm_diff, dts_diff, tot_diff, dts;
 
     snprintf(restrm->function_name,1024,"%s","infile_wait");
+
+    restrm->soft_restart = 1;
 
     if (finish) return;
 
@@ -309,7 +281,6 @@ void infile_wait(ctx_restream *restrm){
         return;
     }
 
-    restrm->soft_restart = 1;
     restrm->watchdog_playlist = av_gettime_relative();
 
     if (restrm->pkt.dts != AV_NOPTS_VALUE) {

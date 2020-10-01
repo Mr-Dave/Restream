@@ -167,6 +167,7 @@ void output_pipestatus(ctx_restream *restrm){
     restrm->watchdog_playlist = av_gettime_relative();
 
     if (restrm->pipe_state == PIPE_NEEDS_RESET ){
+
         writer_close(restrm);
 
         reader_start(restrm);
@@ -213,10 +214,9 @@ void *process_playlist(void *parms){
     fprintf(stderr, "%s: Process playlist %d\n"
         ,restrm->guide_info->guide_displayname,thread_count);
 
-    reader_init(restrm);
+    restrm->watchdog_playlist = av_gettime_relative();
 
-    restrm->dts_base = 0;
-    restrm->dts_max = 0;
+    reader_init(restrm);
 
     finish_playlist = 0;
     while (!finish_playlist){
@@ -254,8 +254,6 @@ void *process_playlist(void *parms){
                     retcd = av_read_frame(restrm->ifmt_ctx, &restrm->pkt);
                     if (retcd < 0) break;
 
-                    infile_rescale_pkt(restrm);
-
                     infile_wait(restrm);
 
                     output_pipestatus(restrm);
@@ -268,13 +266,6 @@ void *process_playlist(void *parms){
             }
 
             restrm->watchdog_playlist = av_gettime_relative();
-
-            if (restrm->pipe_state != PIPE_IS_CLOSED){
-                restrm->dts_base = restrm->dts_max;
-                restrm->dts_base = 0; /* Temp for testing */
-            } else {
-                restrm->dts_base = 0;
-            }
 
             writer_close(restrm);
 
@@ -352,7 +343,7 @@ void *channel_process(void *parms){
     pthread_create(&restrm->process_playlist_thread, &handler_attribute, process_playlist, restrm);
 
     while (!restrm->finish){
-        if ((av_gettime_relative() - restrm->watchdog_playlist) > 9000000){
+        if ((av_gettime_relative() - restrm->watchdog_playlist) > 5000000){
 
             if (restrm->soft_restart == 1){
                 fprintf(stderr,"%s: Watchdog soft: %s\n"
@@ -558,7 +549,7 @@ int main(int argc, char **argv){
 
     if (argc < 2) {
         printf("No parameter file specified.  Using testing version. %s \n", argv[0]);
-        parameter_file = "/home/dave/restream/testall.txt";
+        parameter_file = "./testall.txt";
     } else {
         parameter_file  = argv[1];
     }
@@ -568,8 +559,6 @@ int main(int argc, char **argv){
     signal_setup();
 
     av_register_all();
-
-    avfilter_register_all();
 
     av_log_set_callback((void *)ffavlogger);
 

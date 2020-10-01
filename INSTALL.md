@@ -2,11 +2,11 @@
 
 Setup Configuration 
 In a text file add entries such as this:
-"/mnt/FDrive/Series/Nature/" "/home/dave/restream/pipes/channel70.ts" "r"
+"/mnt/FDrive/Series/Nature/" "/home/dave/restream/pipes/channel77.mkv" "r"
 
 Where
 "/mnt/FDrive/Series/Nature/" is the directory of recordings
-"/home/dave/restream/pipes/channel70.ts" is the named pipe
+"/home/dave/restream/pipes/channel77.mkv" is the named pipe
 "r" indicates randomize the entries, "a" would indicate alpha sorted
 
 Add as many rows as desired, each will be a channel. 
@@ -14,7 +14,7 @@ Add as many rows as desired, each will be a channel.
 
 Setup named pipes:
 
-mkfifo /home/dave/restream/pipes/channel70.ts
+mkfifo /home/dave/source/restream/pipes/channel78.mkv
 
 
 Setup TVHeadend
