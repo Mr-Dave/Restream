@@ -12,10 +12,11 @@
         char         *channel_pipe;
         char         *channel_order;
         int          channel_status;
+        unsigned int channel_seed;
         pthread_t    process_channel_thread;
     };
 
     int playlist_loaddir(ctx_restream *restrm);
     int playlist_free(ctx_restream *restrm);
-    
+
 #endif

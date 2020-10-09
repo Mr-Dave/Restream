@@ -41,6 +41,15 @@ void *reader(void *parms){
                 restrm->reader_status = READER_STATUS_READING;
             }
             break;
+        case READER_ACTION_BYTE:
+            if (pipefd_r == 0) pipefd_r = open(restrm->out_filename, O_RDONLY | O_NONBLOCK);
+            if (pipefd_r == -1 ) {
+                pipefd_r = 0;
+                restrm->reader_status = READER_STATUS_CLOSED;
+            } else {
+                restrm->reader_status = READER_STATUS_READBYTE;
+            }
+            break;
         case READER_ACTION_OPEN:
             if (pipefd_r == 0){
                 pipefd_r = open(restrm->out_filename, O_RDONLY | O_NONBLOCK);
@@ -72,6 +81,10 @@ void *reader(void *parms){
         if ((restrm->reader_status == READER_STATUS_READING) && (pipefd_r != 0) ){
             bytes_read=read(pipefd_r, byte_buffer, sizeof(byte_buffer));
             (void)bytes_read;
+        } else if ((restrm->reader_status == READER_STATUS_READBYTE) && (pipefd_r != 0) ){
+            bytes_read=read(pipefd_r, byte_buffer, sizeof(byte_buffer));
+            (void)bytes_read;
+            SLEEP(0, 10000000);
         } else {
             SLEEP(1,0);
         }
@@ -95,6 +108,17 @@ void reader_start(ctx_restream *restrm){
         pthread_mutex_lock(&restrm->mutex_reader);
             restrm->reader_action = READER_ACTION_START;
             while (restrm->reader_status != READER_STATUS_READING);
+        pthread_mutex_unlock(&restrm->mutex_reader);
+    }
+
+}
+
+void reader_startbyte(ctx_restream *restrm){
+
+    if (restrm->reader_status != READER_STATUS_READBYTE){
+        pthread_mutex_lock(&restrm->mutex_reader);
+            restrm->reader_action = READER_ACTION_BYTE;
+            while (restrm->reader_status != READER_STATUS_READBYTE);
         pthread_mutex_unlock(&restrm->mutex_reader);
     }
 

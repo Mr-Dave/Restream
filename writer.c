@@ -156,35 +156,45 @@ int writer_init_audio(ctx_restream *restrm, int indx) {
     return 0;
 }
 
-int writer_init_open(ctx_restream *restrm) {
+void writer_close_encoder(ctx_restream *restrm) {
+    int indx;
 
-    int retcd;
-
-    snprintf(restrm->function_name, 1024, "%s", "writer_init_open");
+    snprintf(restrm->function_name, 1024, "%s", "writer_close_encoder");
     restrm->watchdog_playlist = av_gettime_relative();
 
-    retcd = avio_open(&restrm->ofmt_ctx->pb, restrm->out_filename, AVIO_FLAG_WRITE);
-    if (retcd < 0) {
-        fprintf(stderr, "%s: AVIO Open 1 Failed '%s'", restrm->guide_info->guide_displayname, restrm->out_filename);
-        return -1;
-    }
-
-    retcd = avformat_write_header(restrm->ofmt_ctx, NULL);
-    if (retcd < 0) {
-        if (restrm->ofmt_ctx) {
-            if (restrm->ofmt_ctx->pb != NULL) {
-                fprintf(stderr, "%s: close1 \n", restrm->guide_info->guide_displayname);
-                avio_closep(&restrm->ofmt_ctx->pb);
-            }
-            avformat_free_context(restrm->ofmt_ctx);
+    indx = 0;
+    while (indx < restrm->stream_count) {
+        if (restrm->stream_ctx[indx].enc_ctx != NULL) {
+            avcodec_free_context(&restrm->stream_ctx[indx].enc_ctx);
+            restrm->stream_ctx[indx].enc_ctx = NULL;
         }
-        restrm->ofmt_ctx = NULL;
-        fprintf(stderr, "%s: Error occurred when opening output file\n", restrm->guide_info->guide_displayname);
-        restrm->pipe_state = PIPE_NEEDS_RESET;
-        return -1;
+        indx++;
     }
+    avformat_free_context(restrm->ofmt_ctx);
+    restrm->ofmt_ctx = NULL;
 
-    return 0;
+}
+
+void writer_close(ctx_restream *restrm) {
+
+    snprintf(restrm->function_name, 1024, "%s", "writer_close");
+    restrm->watchdog_playlist = av_gettime_relative();
+
+    reader_start(restrm);
+
+    if (restrm->ofmt_ctx) {
+        if (restrm->ofmt_ctx->pb != NULL) {
+            av_write_trailer(restrm->ofmt_ctx); /* Frees some memory*/
+            avio_closep(&restrm->ofmt_ctx->pb);
+        }
+        writer_close_encoder(restrm);
+    }
+    restrm->ofmt_ctx = NULL;
+
+    reader_close(restrm);
+
+    restrm->pipe_state = PIPE_IS_CLOSED;
+
 }
 
 int writer_init(ctx_restream *restrm) {
@@ -235,60 +245,69 @@ int writer_init(ctx_restream *restrm) {
     return 0;
 }
 
-void writer_close_encoder(ctx_restream *restrm) {
-    int indx;
+int writer_init_open(ctx_restream *restrm) {
 
-    snprintf(restrm->function_name, 1024, "%s", "writer_close_encoder");
+    int retcd;
+    char errstr[128];
+
+    snprintf(restrm->function_name, 1024, "%s", "writer_init_open");
     restrm->watchdog_playlist = av_gettime_relative();
 
-    indx = 0;
-    while (indx < restrm->stream_count) {
-        if (restrm->stream_ctx[indx].enc_ctx != NULL) {
-            avcodec_free_context(&restrm->stream_ctx[indx].enc_ctx);
-            restrm->stream_ctx[indx].enc_ctx = NULL;
-        }
-        indx++;
+    retcd = avio_open(&restrm->ofmt_ctx->pb, restrm->out_filename, AVIO_FLAG_WRITE);
+    if (retcd < 0) {
+        fprintf(stderr, "%s: AVIO Open 1 Failed '%s'", restrm->guide_info->guide_displayname, restrm->out_filename);
+        return -1;
     }
-    avformat_free_context(restrm->ofmt_ctx);
-    restrm->ofmt_ctx = NULL;
 
+    retcd = avformat_write_header(restrm->ofmt_ctx, NULL);
+    if (retcd < 0) {
+        av_strerror(retcd, errstr, sizeof(errstr));
+        fprintf(stderr, "%s: avformat_write_header error. writer_init_open %s\n"
+                    , restrm->guide_info->guide_displayname, errstr);
+
+        writer_close(restrm);
+
+        retcd = writer_init(restrm);
+
+        restrm->pipe_state = PIPE_NEEDS_RESET;
+        return -1;
+    }
+
+    return 0;
 }
 
-void writer_close(ctx_restream *restrm) {
 
-    snprintf(restrm->function_name, 1024, "%s", "writer_close");
-    restrm->watchdog_playlist = av_gettime_relative();
-
-    reader_start(restrm);
-
-    if (restrm->ofmt_ctx) {
-        if (restrm->ofmt_ctx->pb != NULL) {
-            av_write_trailer(restrm->ofmt_ctx); /* Frees some memory*/
-            avio_closep(&restrm->ofmt_ctx->pb);
-        }
-        writer_close_encoder(restrm);
-    }
-    restrm->ofmt_ctx = NULL;
-
-    reader_close(restrm);
-
-    restrm->pipe_state = PIPE_IS_CLOSED;
-
-}
 
 void writer_packet(ctx_restream *restrm) {
 
-    int retcd;
+    int retcd, indx;
+    int64_t base_tmp;
 
     if (finish) return;
 
     snprintf(restrm->function_name, 1024, "%s", "writer_packet");
     restrm->watchdog_playlist = av_gettime_relative();
 
-    retcd = av_interleaved_write_frame(restrm->ofmt_ctx, &restrm->pkt);
-    if (retcd < 0){
-        restrm->pipe_state = PIPE_NEEDS_RESET;
+    base_tmp = av_rescale(restrm->dts_base
+            , restrm->ofmt_ctx->streams[restrm->pkt.stream_index]->time_base.den
+            , 1000000);
+    if (restrm->pkt.pts != AV_NOPTS_VALUE) restrm->pkt.pts += base_tmp;
+    if (restrm->pkt.dts != AV_NOPTS_VALUE) restrm->pkt.dts += base_tmp;
+
+    //retcd = av_interleaved_write_frame(restrm->ofmt_ctx, &restrm->pkt);
+    retcd = av_write_frame(restrm->ofmt_ctx, &restrm->pkt);
+
+    /*
+    if ((av_gettime_relative() - restrm->connect_start) <1000000) {
+        for (indx=50; indx<=5; indx++){
+            if (restrm->pkt.pts != AV_NOPTS_VALUE) restrm->pkt.pts++;
+            if (restrm->pkt.dts != AV_NOPTS_VALUE) restrm->pkt.dts++;
+            retcd = av_write_frame(restrm->ofmt_ctx, &restrm->pkt);
+        }
     }
+    */
+
+    if (retcd < 0) restrm->pipe_state = PIPE_NEEDS_RESET;
 
     return;
 

@@ -150,45 +150,28 @@ void output_pipestatus(ctx_restream *restrm){
 
     if (finish) return;
 
-    /* Frequently when the pipe gets opened, it gets a close request
-     * in a very short timeframe thereafter and the associated application
-     * reading from the pipe fails.  To avert this, we set a delay which
-     * requires that the pipe remain open for at least 2 seconds before
-     * allowing it to go back to a closed status
-     */
-    tmnow  = av_gettime_relative();
-    if (((tmnow - restrm->connect_start)<2000000) &&
-        (restrm->pipe_state == PIPE_IS_OPEN)){
-        return;
-    }
-
     snprintf(restrm->function_name,1024,"%s","output_pipestatus");
 
     restrm->watchdog_playlist = av_gettime_relative();
 
     if (restrm->pipe_state == PIPE_NEEDS_RESET ){
-
         writer_close(restrm);
-
         reader_start(restrm);
-
-        retcd = writer_init(restrm);
-        if (retcd < 0){
-            fprintf(stderr,"%s: Failed to open the new connection\n"
-                ,restrm->guide_info->guide_displayname);
-        }
-
+            retcd = writer_init(restrm);
+            if (retcd < 0){
+                fprintf(stderr,"%s: Failed to open the new connection\n"
+                    ,restrm->guide_info->guide_displayname);
+            }
         reader_close(restrm);
-
         fprintf(stderr,"%s: Connection closed\n",restrm->guide_info->guide_displayname);
         restrm->pipe_state = PIPE_IS_CLOSED;
-
     } else if (restrm->pipe_state == PIPE_IS_CLOSED) {
         output_checkpipe(restrm);
         if (restrm->pipe_state == PIPE_IS_OPEN) {
+
             /* If was closed and now is being indicated as open
-             * then we have a new connection.
-             */
+             * then we have a new connection. */
+
             retcd = writer_init_open(restrm);
             if (retcd < 0){
                 fprintf(stderr,"%s: Failed to open the new connection\n"
@@ -219,6 +202,9 @@ void *process_playlist(void *parms){
     reader_init(restrm);
 
     finish_playlist = 0;
+    restrm->dts_base = 0;
+    restrm->connect_start = 0;
+
     while (!finish_playlist){
         retcd = playlist_loaddir(restrm);
         if (retcd == -1) finish_playlist = 1;
@@ -297,6 +283,7 @@ void *process_playlist(void *parms){
 
 void *channel_process(void *parms){
 
+    int retcd;
     struct channel_item *chn_item;
     ctx_restream *restrm;
     pthread_attr_t handler_attribute;
@@ -317,10 +304,22 @@ void *channel_process(void *parms){
     restrm->playlist_dir = malloc((strlen(chn_item->channel_dir)+2)*sizeof(char));
     restrm->out_filename = malloc((strlen(chn_item->channel_pipe)+2)*sizeof(char));
     restrm->playlist_sort_method = malloc((strlen(chn_item->channel_order)+2)*sizeof(char));
+    restrm->rand_seed = chn_item->channel_seed;
 
-    strcpy(restrm->playlist_dir,chn_item->channel_dir);
-    strcpy(restrm->out_filename,chn_item->channel_pipe);
-    strcpy(restrm->playlist_sort_method,chn_item->channel_order);
+    retcd = snprintf(restrm->playlist_dir,strlen(chn_item->channel_dir)+1,"%s",chn_item->channel_dir);
+    if (retcd < 0){
+      fprintf(stderr,"Error writing to restream playlist dir %d\n",thread_count);
+    }
+
+    retcd = snprintf(restrm->out_filename,strlen(chn_item->channel_pipe)+1,"%s",chn_item->channel_pipe);
+    if (retcd < 0){
+      fprintf(stderr,"Error writing to restream playlist dir %d\n",thread_count);
+    }
+
+    retcd = snprintf(restrm->playlist_sort_method,strlen(chn_item->channel_order)+1,"%s",chn_item->channel_order);
+    if (retcd < 0){
+      fprintf(stderr,"Error writing to restream playlist dir %d\n",thread_count);
+    }
 
     guide_init(restrm);
 
@@ -408,9 +407,29 @@ void *channel_process(void *parms){
 
 }
 
+int channels_free(struct channel_context *channels, int indx_max)
+{
+    int indx;
+
+    for (indx=0; indx < indx_max; indx++){
+        if (channels->channel_info[indx].channel_dir != NULL){
+            free(channels->channel_info[indx].channel_dir);
+        }
+        if(channels->channel_info[indx].channel_pipe != NULL){
+            free(channels->channel_info[indx].channel_pipe);
+        }
+        if (channels->channel_info[indx].channel_order != NULL){
+            free(channels->channel_info[indx].channel_order);
+        }
+    }
+    free(channels->channel_info);
+    free(channels);
+
+}
+
 int channels_init(char *parm_file){
 
-    int indx;
+    int indx, retcd;
     struct channel_context *channels;
     int channels_running;
 
@@ -419,8 +438,11 @@ int channels_init(char *parm_file){
     int parm_index, parm_start, parm_end;
     int finish_channels;
     pthread_attr_t handler_attribute;
+    struct timeval tv;
+    unsigned int usec;
 
-    channels = malloc(sizeof(struct channel_context));
+    gettimeofday(&tv,NULL);
+    usec = (unsigned int)(tv.tv_usec / 10000) ;
 
     fp = fopen(parm_file, "r");
     if (fp == NULL){
@@ -428,70 +450,80 @@ int channels_init(char *parm_file){
         return -1;
     }
 
+    indx = 0;
+    channels = malloc(sizeof(struct channel_context));
+    channels->channel_info = malloc(sizeof(struct channel_item));
     channels->channel_count = 0;
+
     while (fgets(line_char, sizeof(line_char), fp) != NULL) {
-        channels->channel_count++;
-    }
-    fclose(fp);
 
-    if (channels->channel_count == 0){
-        fprintf(stderr,"Parameter file seems to be empty.\n");
-        return -1;
-    }
-
-    channels->channel_info = malloc(sizeof(struct channel_item) * channels->channel_count);
-
-    for (indx=0; indx < channels->channel_count; indx++){
+        channels->channel_info = realloc(channels->channel_info,sizeof(struct channel_item)*(indx+1));
         channels->channel_info[indx].channel_dir = NULL;
         channels->channel_info[indx].channel_pipe = NULL;
         channels->channel_info[indx].channel_order = NULL;
-    }
+        channels->channel_info[indx].channel_seed = usec + (indx*1000);
 
-    fp = fopen(parm_file, "r");
-    if (fp == NULL){
-        fprintf(stderr,"This is weird, unable to open parameter file on second try.\n");
-        return -1;
-    }
-
-    indx = 0;
-    while (fgets(line_char, sizeof(line_char), fp) != NULL) {
         parm_end = -1;
         for(parm_index=1; parm_index <= 3; parm_index++){
             parm_start = parm_end + 1;
             while (parm_start < sizeof(line_char)) {
                 if (line_char[parm_start] == '\"' ) break;
-                    parm_start ++;
+                parm_start ++;
             }
             parm_end = parm_start + 1;
             while (parm_end < sizeof(line_char)) {
                 if (line_char[parm_end] == '\"') break;
-                    parm_end ++;
+                parm_end ++;
             }
 
             if (parm_end >= (int)sizeof(line_char) ) {
-                if (parm_index >= 3) free(channels->channel_info[2].channel_pipe);
-                if (parm_index >= 2) free(channels->channel_info[1].channel_dir);
+                if (parm_index >= 3) free(channels->channel_info[indx].channel_pipe);
+                if (parm_index >= 2) free(channels->channel_info[indx].channel_dir);
             } else {
                 switch (parm_index){
                 case 1:
-                    channels->channel_info[indx].channel_dir = malloc((parm_end - parm_start));
-                    memset(channels->channel_info[indx].channel_dir,'\0',(parm_end - parm_start));
-                    strncpy(channels->channel_info[indx].channel_dir, line_char + parm_start + 1 , parm_end - parm_start -1 );
+                    channels->channel_info[indx].channel_dir = calloc((parm_end - parm_start),sizeof(char));
+                    retcd = snprintf(channels->channel_info[indx].channel_dir
+                                ,parm_end - parm_start, "%s", &line_char[parm_start + 1]);
+                    if (retcd < 0){
+                        channels_free(channels,indx);
+                        return -1;
+                    }
                     break;
                 case 2:
-                    channels->channel_info[indx].channel_pipe = malloc((parm_end - parm_start));
-                    memset(channels->channel_info[indx].channel_pipe,'\0',(parm_end - parm_start));
-                    strncpy(channels->channel_info[indx].channel_pipe, line_char + parm_start+1 , parm_end - parm_start -1 );
+                    channels->channel_info[indx].channel_pipe = calloc((parm_end - parm_start),sizeof(char));
+                    retcd = snprintf(channels->channel_info[indx].channel_pipe
+                                ,parm_end - parm_start, "%s", &line_char[parm_start + 1]);
+                    if (retcd < 0){
+                        channels_free(channels,indx);
+                        return -1;
+                    }
                     break;
                 case 3:
-                    channels->channel_info[indx].channel_order = malloc((parm_end - parm_start));
-                    memset(channels->channel_info[indx].channel_order,'\0',(parm_end - parm_start));
-                    strncpy(channels->channel_info[indx].channel_order, line_char + parm_start + 1 , parm_end - parm_start - 1 );
+                    channels->channel_info[indx].channel_order = calloc((parm_end - parm_start),sizeof(char));
+                    retcd = snprintf(channels->channel_info[indx].channel_order
+                                ,parm_end - parm_start, "%s", &line_char[parm_start + 1]);
+                    if (retcd < 0){
+                        channels_free(channels, indx);
+                        return -1;
+                    }
+                    fprintf(stderr,"test: %s %s %s.\n"
+                        ,channels->channel_info[indx].channel_dir
+                        ,channels->channel_info[indx].channel_pipe
+                        ,channels->channel_info[indx].channel_order);
+
                     break;
                 }
             }
         }
         indx ++;
+    }
+    channels->channel_count = indx;
+
+    if (channels->channel_count == 0){
+        fprintf(stderr,"Parameter file seems to be empty.\n");
+        channels_free(channels, 0);
+        return -1;
     }
 
     pthread_attr_init(&handler_attribute);
@@ -514,19 +546,7 @@ int channels_init(char *parm_file){
         if (channels_running == 0) finish_channels = 1;
     }
 
-    for (indx=0; indx < channels->channel_count; indx++){
-        if (channels->channel_info[indx].channel_dir != NULL){
-            free(channels->channel_info[indx].channel_dir);
-        }
-        if(channels->channel_info[indx].channel_pipe != NULL){
-            free(channels->channel_info[indx].channel_pipe);
-        }
-        if (channels->channel_info[indx].channel_order != NULL){
-            free(channels->channel_info[indx].channel_order);
-        }
-    }
-    free(channels->channel_info);
-    free(channels);
+    channels_free(channels, channels->channel_count);
 
     //printf("Exit channels_init normal \n");
     return 0;
@@ -557,8 +577,6 @@ int main(int argc, char **argv){
     finish = 0;
 
     signal_setup();
-
-    av_register_all();
 
     av_log_set_callback((void *)ffavlogger);
 

@@ -57,18 +57,11 @@ void playlist_sort_random(ctx_restream *restrm){
 
     char *temp;
     int indx1, indx2, tmpseq, tmplen;
-    unsigned int usec;
-    struct timeval tv;
 
     snprintf(restrm->function_name,1024,"%s","playlist_sort_random");
 
     restrm->watchdog_playlist = av_gettime_relative() + 5000000;
 
-    gettimeofday(&tv,NULL);
-
-    usec = (unsigned int)(tv.tv_usec / 10000) ;
-    usec = (unsigned int)(tv.tv_usec - (usec * 10000));
-    usec = usec + (long) restrm;
     /*
     fprintf(stderr,"%s: seed: %u\n"
             ,restrm->guide_info->guide_displayname
@@ -77,7 +70,7 @@ void playlist_sort_random(ctx_restream *restrm){
     */
 
     for(indx1=0; indx1 <= restrm->playlist_count-1 ; indx1++){
-        restrm->playlist[indx1].movie_seq = rand_r(&usec);
+        restrm->playlist[indx1].movie_seq = rand_r(&restrm->rand_seed);
         /*
         fprintf(stderr," %d %s: \n"
             ,restrm->playlist[indx1].movie_seq
@@ -117,8 +110,8 @@ int playlist_loaddir(ctx_restream *restrm){
 
     DIR           *d;
     struct dirent *dir;
-    size_t         basepath_len;
-    int            indx;
+    size_t         basepath_len, totlen;
+    int            indx, retcd;
 
     snprintf(restrm->function_name,1024,"%s","playlist_loaddir");
 
@@ -130,7 +123,7 @@ int playlist_loaddir(ctx_restream *restrm){
 
     d = opendir(restrm->playlist_dir);
     if (d) {
-        basepath_len = strlen(restrm->playlist_dir);
+        basepath_len = strlen(restrm->playlist_dir)+1;
         while ((dir=readdir(d)) != NULL){
             if ((strstr(dir->d_name,".mkv") != NULL) || (strstr(dir->d_name,".mp4") != NULL)) {
                 restrm->playlist_count++;
@@ -142,10 +135,14 @@ int playlist_loaddir(ctx_restream *restrm){
             indx = 0;
             while ((dir=readdir(d)) != NULL){
                 if ((strstr(dir->d_name,".mkv") != NULL) || (strstr(dir->d_name,".mp4") != NULL)) {
-                    restrm->playlist[indx].movie_path = malloc(basepath_len + strlen(dir->d_name) + 2);
-                    memset(restrm->playlist[indx].movie_path,'\0',basepath_len + strlen(dir->d_name) + 2);
-                    strncpy(restrm->playlist[indx].movie_path,restrm->playlist_dir,basepath_len);
-                    strcat(restrm->playlist[indx].movie_path,dir->d_name);
+                    totlen =basepath_len + strlen(dir->d_name);
+                    restrm->playlist[indx].movie_path = calloc(totlen + 2,sizeof(char));
+                    retcd = snprintf(restrm->playlist[indx].movie_path, totlen+1
+                        ,"%s%s",restrm->playlist_dir,dir->d_name);
+                    if (retcd < 0){
+                        fprintf(stderr,"Error on playlist %s\n",restrm->playlist_dir);
+                        return -1;
+                    }
                     indx ++;
                 }
             }

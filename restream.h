@@ -52,13 +52,15 @@
         READER_STATUS_PAUSED,
         READER_STATUS_OPEN,
         READER_STATUS_INACTIVE,
-        READER_STATUS_READING
+        READER_STATUS_READING,
+        READER_STATUS_READBYTE
     };
     enum READER_ACTION{
         READER_ACTION_START,
         READER_ACTION_OPEN,
         READER_ACTION_CLOSE,
-        READER_ACTION_END
+        READER_ACTION_END,
+        READER_ACTION_BYTE
     };
 
     typedef struct StreamContext {
@@ -100,6 +102,9 @@
         int64_t                 time_start;
         int64_t                 dts_start;
         int64_t                 dts_last;
+        int64_t                 dts_base;
+
+        unsigned int            rand_seed;
 
         struct playlist_item    *playlist;
         char                    *playlist_dir;

@@ -10,8 +10,7 @@
 
 int infile_init(ctx_restream *restrm){
 
-    int retcd;
-    int stream_index;
+    int retcd, stream_index, indx;
     char errstr[128];
 
     snprintf(restrm->function_name,1024,"%s","infile_init");
@@ -93,9 +92,9 @@ int infile_init(ctx_restream *restrm){
             return -1;
         }
 
-        /* Reencode video & audio and remux subtitles etc. */
         if (codec_ctx->codec_type == AVMEDIA_TYPE_VIDEO ||
             codec_ctx->codec_type == AVMEDIA_TYPE_AUDIO) {
+
             if (codec_ctx->codec_type == AVMEDIA_TYPE_VIDEO){
                 codec_ctx->framerate = av_guess_frame_rate(restrm->ifmt_ctx, stream, NULL);
                 restrm->video_index = stream_index;
@@ -113,40 +112,43 @@ int infile_init(ctx_restream *restrm){
 
         restrm->stream_ctx[stream_index].dec_ctx = codec_ctx;
 
-        if (codec_ctx->codec_type == AVMEDIA_TYPE_VIDEO ||
-            codec_ctx->codec_type == AVMEDIA_TYPE_AUDIO) {
+        if (codec_ctx->codec_type == AVMEDIA_TYPE_VIDEO) {
 
-            /* Read pkts to get correct start time */
-            av_packet_unref(&restrm->pkt);
-            av_init_packet(&restrm->pkt);
-            restrm->pkt.data = NULL;
-            restrm->pkt.size = 0;
+            indx = 0;
+            restrm->dts_start = 0;
+            while (indx < 30) {
+                /* Read some pkts to get correct start time */
+                av_packet_unref(&restrm->pkt);
+                av_init_packet(&restrm->pkt);
+                restrm->pkt.data = NULL;
+                restrm->pkt.size = 0;
 
-            snprintf(restrm->function_name,1024,"%s","infile_init 04");
-            restrm->watchdog_playlist = av_gettime_relative() + 5000000;
+                snprintf(restrm->function_name,1024,"%s","infile_init 04");
+                restrm->watchdog_playlist = av_gettime_relative() + 5000000;
 
-            retcd = av_read_frame(restrm->ifmt_ctx, &restrm->pkt);
-            if (retcd < 0){
-                fprintf(stderr, "%s: Failed to read first packet %d\n"
-                    ,restrm->guide_info->guide_displayname, stream_index);
-                return -1;
-            }
+                retcd = av_read_frame(restrm->ifmt_ctx, &restrm->pkt);
+                if (retcd < 0){
+                    fprintf(stderr, "%s: Failed to read first packets %d\n"
+                        ,restrm->guide_info->guide_displayname, stream_index);
+                    return -1;
+                }
 
-            if (restrm->pkt.dts == AV_NOPTS_VALUE) {
-                restrm->dts_start = 0;
-            } else {
-                restrm->dts_start = av_rescale(restrm->pkt.dts, 1000000
-                    ,restrm->ifmt_ctx->streams[restrm->pkt.stream_index]->time_base.den);
+                if (restrm->pkt.dts != AV_NOPTS_VALUE) {
+                    restrm->dts_start = av_rescale(restrm->pkt.dts, 1000000
+                        ,restrm->ifmt_ctx->streams[restrm->pkt.stream_index]->time_base.den);
+                    indx = 1000;
+                }
+                indx++;
             }
 
             restrm->time_start = av_gettime_relative();
             restrm->dts_last = restrm->dts_start;
 
-            snprintf(restrm->function_name,1024,"%s","infile_init 07");
+            snprintf(restrm->function_name,1024,"%s","infile_init 05");
             restrm->watchdog_playlist = av_gettime_relative() + 5000000;
         }
 
-        stream_index ++;
+        stream_index++;
     }
 
     return 0;
@@ -174,6 +176,9 @@ void infile_close(ctx_restream *restrm){
     restrm->ifmt_ctx = NULL;
     //fprintf(stderr, "%s: Input closed \n"
     //        ,restrm->guide_info->guide_displayname);
+
+    restrm->dts_base = restrm->dts_last + 1;
+
 }
 
 void infile_wait(ctx_restream *restrm){
@@ -188,13 +193,6 @@ void infile_wait(ctx_restream *restrm){
 
     if (restrm->pkt.stream_index != restrm->video_index) return;
 
-    int64_t tmnow;
-    tmnow  = av_gettime_relative();
-    if (((tmnow - restrm->connect_start)<2500000) &&
-        (restrm->pipe_state == PIPE_IS_OPEN)){
-        return;
-    }
-
     restrm->watchdog_playlist = av_gettime_relative();
 
     if (restrm->pkt.dts != AV_NOPTS_VALUE) {
@@ -203,6 +201,9 @@ void infile_wait(ctx_restream *restrm){
 
         if (dts < restrm->dts_last) return;
         restrm->dts_last = dts;
+
+        tm_diff = av_gettime_relative() - restrm->connect_start;
+        if ((tm_diff <2000000) && (restrm->pipe_state == PIPE_IS_OPEN)) return;
 
         /* How much time has really elapsed since the start of movie*/
         tm_diff = av_gettime_relative() - restrm->time_start;
@@ -217,16 +218,20 @@ void infile_wait(ctx_restream *restrm){
                 snprintf(restrm->function_name,1024,"%s %ld","infile_wait",tot_diff);
                 SLEEP(0, tot_diff * 1000);
             } else {
+                /*
                 if (restrm->pipe_state == PIPE_NEEDS_RESET ){
-                fprintf(stderr
-                    ,"%s: Excessive wait time "
-                     " dtsdiff: %ld dts:%ld pktdts:%ld"
-                     " tdiff: %ld totdif:%ld last: %ld\n"
-                    , restrm->guide_info->guide_displayname
-                    , dts_diff, dts ,restrm->pkt.dts
-                    , tm_diff, tot_diff, restrm->dts_last
-                    );
+                    fprintf(stderr
+                        ,"%s: Excessive wait time "
+                        " dts_last: %ld pkt.dts:%ld"
+                        " dts_start: %ld dts_base:%ld"
+                        " tm_diff: %ld dts_diff: %ld tot_diff: %ld\n"
+                        , restrm->guide_info->guide_displayname
+                        , restrm->dts_last, restrm->pkt.dts
+                        , restrm->dts_start, restrm->dts_base
+                        , tm_diff, dts_diff, tot_diff
+                        );
                 }
+                */
                 /* reset all our times to see if we can get in sync*/
                 restrm->time_start = av_gettime_relative();
                 restrm->dts_start = av_rescale(restrm->pkt.dts, 1000000
