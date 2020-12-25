@@ -264,11 +264,14 @@ int writer_init_open(ctx_restream *restrm) {
         av_strerror(retcd, errstr, sizeof(errstr));
         fprintf(stderr, "%s: avformat_write_header error. writer_init_open %s\n"
                     , restrm->guide_info->guide_displayname, errstr);
-
         writer_close(restrm);
-
-        retcd = writer_init(restrm);
-
+        reader_start(restrm);
+            retcd = writer_init(restrm);
+            if (retcd < 0){
+                fprintf(stderr,"%s: Failed to open the new connection\n"
+                    ,restrm->guide_info->guide_displayname);
+            }
+        reader_close(restrm);
         restrm->pipe_state = PIPE_NEEDS_RESET;
         return -1;
     }
@@ -299,7 +302,7 @@ void writer_packet(ctx_restream *restrm) {
 
     /*
     if ((av_gettime_relative() - restrm->connect_start) <1000000) {
-        for (indx=50; indx<=5; indx++){
+        for (indx=0; indx<=5; indx++){
             if (restrm->pkt.pts != AV_NOPTS_VALUE) restrm->pkt.pts++;
             if (restrm->pkt.dts != AV_NOPTS_VALUE) restrm->pkt.dts++;
             retcd = av_write_frame(restrm->ofmt_ctx, &restrm->pkt);
@@ -307,7 +310,10 @@ void writer_packet(ctx_restream *restrm) {
     }
     */
 
-    if (retcd < 0) restrm->pipe_state = PIPE_NEEDS_RESET;
+    if (retcd < 0){
+        //fprintf(stderr, "%s: write packet: reset \n", restrm->guide_info->guide_displayname);
+        restrm->pipe_state = PIPE_NEEDS_RESET;
+    }
 
     return;
 

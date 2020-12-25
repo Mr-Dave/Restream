@@ -40,8 +40,29 @@ Setup TVHeadend
 
 Create new network, IP
 
-Add a mux to the IP network with the following:
-pipe:///usr/bin/ffmpeg -loglevel fatal -follow 1 -i file:/home/dave/source/restream/pipes/channel70.mkv  -c:v libx264 -ar 48000 -ac 2 -c:a libfdk_aac -f mpegts -tune zerolatency pipe:1
+Add a mux to the IP network with the following sample for channel 67:
+pipe:///bin/bash /home/dave/source/restream/execpipe.sh 67
+
+In the execpipe script put the folllowing
+#!/bin/bash
+
+PIPE="/home/dave/source/restream/pipes/channel"$1".mkv"
+
+function SendToPipe
+{
+#/usr/bin/ffmpeg -loglevel fatal -follow 1 -fflags +genpts -analyzeduration 64 -i $PIPE -c:v libx264 -ar 48000 -ac 2 -c:a libfdk_aac -f mpegts pipe:1
+/usr/bin/ffmpeg -loglevel fatal -i $PIPE -c:v libx264 -ar 48000 -ac 2 -c:a libfdk_aac -f mpegts pipe:1
+
+}
+
+
+while true
+do
+  SendToPipe
+  sleep 1
+done
+
+exit 0
 
 Make sure the scaling in this matches any scaling that may occur in the stream.
 Scaling, video format, audio format conversions make the transitions between

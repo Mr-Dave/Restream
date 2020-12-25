@@ -171,15 +171,16 @@ void output_pipestatus(ctx_restream *restrm){
 
             /* If was closed and now is being indicated as open
              * then we have a new connection. */
-
             retcd = writer_init_open(restrm);
             if (retcd < 0){
                 fprintf(stderr,"%s: Failed to open the new connection\n"
                     ,restrm->guide_info->guide_displayname);
                 restrm->pipe_state = PIPE_NEEDS_RESET;
+                return;
             }
             fprintf(stderr,"%s: New Connection\n",restrm->guide_info->guide_displayname);
             restrm->connect_start = av_gettime_relative();
+            restrm->pipe_state = PIPE_IS_OPEN;
         }
     }
 }
@@ -461,7 +462,7 @@ int channels_init(char *parm_file){
         channels->channel_info[indx].channel_dir = NULL;
         channels->channel_info[indx].channel_pipe = NULL;
         channels->channel_info[indx].channel_order = NULL;
-        channels->channel_info[indx].channel_seed = usec + (indx*1000);
+        channels->channel_info[indx].channel_seed = rand_r(&usec);
 
         parm_end = -1;
         for(parm_index=1; parm_index <= 3; parm_index++){
