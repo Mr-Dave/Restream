@@ -3,6 +3,8 @@
 #include <sys/un.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "restream.h"
@@ -11,7 +13,6 @@
 #include "infile.h"
 #include "reader.h"
 #include "writer.h"
-
 
 void guide_names_movie(ctx_restream *restrm){
 
@@ -277,6 +278,15 @@ void guide_names_guide(ctx_restream *restrm){
 }
 
 void guide_process(ctx_restream *restrm){
+
+    struct stat sdir;
+    int retcd;
+
+    /* Determine if we are on the test machine */
+    retcd = stat("/home/hts/.hts/tvheadend", &sdir);
+    if(retcd < 0) {
+        return;
+    }
 
     snprintf(restrm->function_name,1024,"%s","guide_process");
 
