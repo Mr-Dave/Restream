@@ -137,9 +137,6 @@
         int                    channel_count;
     };
 
-    /* Global shutdown flag*/
-    volatile int finish;  /*Stop movie playing*/
-    volatile int thread_count;
     int restrm_interrupt(void *ctx);
 
 #endif

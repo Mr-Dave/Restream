@@ -189,8 +189,6 @@ void infile_wait(ctx_restream *restrm){
 
     restrm->soft_restart = 1;
 
-    if (finish) return;
-
     if (restrm->pkt.stream_index != restrm->video_index) return;
 
     restrm->watchdog_playlist = av_gettime_relative();

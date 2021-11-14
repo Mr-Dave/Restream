@@ -22,7 +22,6 @@ void *reader(void *parms){
 
     snprintf(restrm->function_name,1024,"%s","reader");
 
-    thread_count++;
     //fprintf(stderr, "%s: reader started %d\n"
     //    ,restrm->guide_info->guide_displayname,thread_count);
 
@@ -91,8 +90,6 @@ void *reader(void *parms){
 
         restrm->watchdog_reader=av_gettime_relative();
     }
-
-    thread_count--;
 
     //fprintf(stderr, "%s: reader exit %d\n"
     //    ,restrm->guide_info->guide_displayname,thread_count);

@@ -32,12 +32,16 @@
  * @example transcoding.c
  */
 
-    #include "restream.h"
-    #include "guide.h"
-    #include "playlist.h"
-    #include "infile.h"
-    #include "reader.h"
-    #include "writer.h"
+#include "restream.h"
+#include "guide.h"
+#include "playlist.h"
+#include "infile.h"
+#include "reader.h"
+#include "writer.h"
+
+int finish;
+int thread_count;
+
 
 void signal_handler(int signo){
 

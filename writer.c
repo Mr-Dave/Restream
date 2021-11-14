@@ -286,8 +286,6 @@ void writer_packet(ctx_restream *restrm) {
     int retcd, indx;
     int64_t base_tmp;
 
-    if (finish) return;
-
     snprintf(restrm->function_name, 1024, "%s", "writer_packet");
     restrm->watchdog_playlist = av_gettime_relative();
 
