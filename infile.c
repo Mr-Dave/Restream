@@ -108,48 +108,54 @@ int infile_init(ctx_restream *restrm){
                     ,restrm->guide_info->guide_displayname, stream_index);
                 return -1;
             }
-        }
 
-        restrm->stream_ctx[stream_index].dec_ctx = codec_ctx;
-
-        if (codec_ctx->codec_type == AVMEDIA_TYPE_VIDEO) {
-
-            indx = 0;
-            restrm->dts_start = 0;
-            while (indx < 30) {
-                /* Read some pkts to get correct start time */
-                av_packet_unref(&restrm->pkt);
-                av_init_packet(&restrm->pkt);
-                restrm->pkt.data = NULL;
-                restrm->pkt.size = 0;
-
-                snprintf(restrm->function_name,1024,"%s","infile_init 04");
-                restrm->watchdog_playlist = av_gettime_relative() + 5000000;
-
-                retcd = av_read_frame(restrm->ifmt_ctx, &restrm->pkt);
-                if (retcd < 0){
-                    fprintf(stderr, "%s: Failed to read first packets %d\n"
-                        ,restrm->guide_info->guide_displayname, stream_index);
-                    return -1;
-                }
-
-                if (restrm->pkt.dts != AV_NOPTS_VALUE) {
-                    restrm->dts_start = av_rescale(restrm->pkt.dts, 1000000
-                        ,restrm->ifmt_ctx->streams[restrm->pkt.stream_index]->time_base.den);
-                    indx = 1000;
-                }
-                indx++;
-            }
-
-            restrm->time_start = av_gettime_relative();
-            restrm->dts_last = restrm->dts_start;
-
-            snprintf(restrm->function_name,1024,"%s","infile_init 05");
-            restrm->watchdog_playlist = av_gettime_relative() + 5000000;
+            restrm->stream_ctx[stream_index].dec_ctx = codec_ctx;
         }
 
         stream_index++;
     }
+
+    /* Read some pkts to get correct start times */
+    indx = 0;
+    restrm->dts_start = 0;
+    while (indx < 100) {
+        av_packet_unref(&restrm->pkt);
+        av_init_packet(&restrm->pkt);
+        restrm->pkt.data = NULL;
+        restrm->pkt.size = 0;
+
+        snprintf(restrm->function_name,1024,"%s","infile_init 04");
+        restrm->watchdog_playlist = av_gettime_relative() + 5000000;
+
+        retcd = av_read_frame(restrm->ifmt_ctx, &restrm->pkt);
+        if (retcd < 0){
+            fprintf(stderr, "%s: Failed to read first packets %d\n"
+                ,restrm->guide_info->guide_displayname, stream_index);
+            return -1;
+        }
+
+        if (restrm->pkt.dts != AV_NOPTS_VALUE) {
+            if (restrm->pkt.stream_index = restrm->video_index) {
+                restrm->dts_start = av_rescale(restrm->pkt.dts, 1000000
+                    ,restrm->ifmt_ctx->streams[restrm->pkt.stream_index]->time_base.den);
+            }
+        }
+
+        if (restrm->dts_start > 0) break;
+
+        indx++;
+    }
+
+    restrm->time_start = av_gettime_relative();
+
+    restrm->dts_last_video = restrm->dts_start;
+    restrm->dts_last_audio = restrm->dts_start;
+
+    restrm->dts_base_video =- restrm->dts_start;
+    restrm->dts_base_audio =- restrm->dts_start;
+
+    snprintf(restrm->function_name, 1024,"%s","infile_init 05");
+    restrm->watchdog_playlist = av_gettime_relative() + 5000000;
 
     return 0;
 
@@ -177,7 +183,8 @@ void infile_close(ctx_restream *restrm){
     //fprintf(stderr, "%s: Input closed \n"
     //        ,restrm->guide_info->guide_displayname);
 
-    restrm->dts_base = restrm->dts_last + 1;
+    restrm->dts_base_video = restrm->dts_last_video + 1;
+    restrm->dts_base_audio = restrm->dts_last_audio + 1;
 
 }
 
@@ -189,7 +196,18 @@ void infile_wait(ctx_restream *restrm){
 
     restrm->soft_restart = 1;
 
-    if (restrm->pkt.stream_index != restrm->video_index) return;
+    if ((restrm->pkt.stream_index != restrm->audio_index) &&
+        (restrm->pkt.stream_index != restrm->video_index)) return;
+
+    if (restrm->pkt.stream_index == restrm->audio_index) {
+        if (restrm->pkt.dts != AV_NOPTS_VALUE) {
+            dts = av_rescale(restrm->pkt.dts, 1000000
+                ,restrm->ifmt_ctx->streams[restrm->pkt.stream_index]->time_base.den);
+            if (dts < restrm->dts_last_audio) return;
+            restrm->dts_last_audio = dts;
+        }
+        return;
+    }
 
     restrm->watchdog_playlist = av_gettime_relative();
 
@@ -197,8 +215,8 @@ void infile_wait(ctx_restream *restrm){
         dts = av_rescale(restrm->pkt.dts, 1000000
             ,restrm->ifmt_ctx->streams[restrm->pkt.stream_index]->time_base.den);
 
-        if (dts < restrm->dts_last) return;
-        restrm->dts_last = dts;
+        if (dts < restrm->dts_last_video) return;
+        restrm->dts_last_video = dts;
 
         tm_diff = av_gettime_relative() - restrm->connect_start;
         if ((tm_diff <2000000) && (restrm->pipe_state == PIPE_IS_OPEN)) return;
@@ -234,7 +252,7 @@ void infile_wait(ctx_restream *restrm){
                 restrm->time_start = av_gettime_relative();
                 restrm->dts_start = av_rescale(restrm->pkt.dts, 1000000
                     ,restrm->ifmt_ctx->streams[restrm->pkt.stream_index]->time_base.den);
-                restrm->dts_last = restrm->dts_start;
+                restrm->dts_last_video = restrm->dts_start;
             }
         }
     }

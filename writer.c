@@ -289,9 +289,16 @@ void writer_packet(ctx_restream *restrm) {
     snprintf(restrm->function_name, 1024, "%s", "writer_packet");
     restrm->watchdog_playlist = av_gettime_relative();
 
-    base_tmp = av_rescale(restrm->dts_base
+    if (restrm->pkt.stream_index == restrm->video_index) {
+        base_tmp = av_rescale(restrm->dts_base_video
             , restrm->ofmt_ctx->streams[restrm->pkt.stream_index]->time_base.den
             , 1000000);
+    } else {
+        base_tmp = av_rescale(restrm->dts_base_audio
+            , restrm->ofmt_ctx->streams[restrm->pkt.stream_index]->time_base.den
+            , 1000000);
+    }
+
     if (restrm->pkt.pts != AV_NOPTS_VALUE) restrm->pkt.pts += base_tmp;
     if (restrm->pkt.dts != AV_NOPTS_VALUE) restrm->pkt.dts += base_tmp;
 

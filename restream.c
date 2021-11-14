@@ -101,19 +101,6 @@ int restrm_interrupt(void *ctx){
     return FALSE;
     (void)(restrm->ofmt);
 
-  /*
-        if ((rtsp_data->interruptcurrenttime.tv_sec - rtsp_data->interruptstarttime.tv_sec ) > rtsp_data->interruptduration){
-            MOTION_LOG(INF, TYPE_NETCAM, NO_ERRNO
-                ,_("%s: Camera reading (%s) timed out")
-                , rtsp_data->cameratype, rtsp_data->camera_name);
-            rtsp_data->interrupted = TRUE;
-            return TRUE;
-        } else{
-            return FALSE;
-        }
-  */
-
-  /* should not be possible to get here */
     return FALSE;
 }
 
@@ -207,7 +194,8 @@ void *process_playlist(void *parms){
     reader_init(restrm);
 
     finish_playlist = 0;
-    restrm->dts_base = 0;
+    restrm->dts_base_audio = 10000;
+    restrm->dts_base_video = 10000;
     restrm->connect_start = 0;
 
     while (!finish_playlist){

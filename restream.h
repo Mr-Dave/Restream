@@ -101,8 +101,10 @@
 
         int64_t                 time_start;
         int64_t                 dts_start;
-        int64_t                 dts_last;
-        int64_t                 dts_base;
+        int64_t                 dts_last_audio;
+        int64_t                 dts_last_video;
+        int64_t                 dts_base_audio;
+        int64_t                 dts_base_video;
 
         unsigned int            rand_seed;
 
