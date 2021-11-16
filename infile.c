@@ -117,7 +117,8 @@ int infile_init(ctx_restream *restrm){
 
     /* Read some pkts to get correct start times */
     indx = 0;
-    restrm->dts_start = 0;
+    restrm->dts_strtin.video = 0;
+    restrm->dts_strtin.audio = 0;
     while (indx < 100) {
         av_packet_unref(&restrm->pkt);
         av_init_packet(&restrm->pkt);
@@ -135,24 +136,53 @@ int infile_init(ctx_restream *restrm){
         }
 
         if (restrm->pkt.dts != AV_NOPTS_VALUE) {
-            if (restrm->pkt.stream_index = restrm->video_index) {
-                restrm->dts_start = av_rescale(restrm->pkt.dts, 1000000
+            if (restrm->pkt.stream_index == restrm->video_index) {
+                restrm->dts_strtin.video = av_rescale(restrm->pkt.dts, 1000000
+                    ,restrm->ifmt_ctx->streams[restrm->pkt.stream_index]->time_base.den);
+            }
+            if (restrm->pkt.stream_index == restrm->audio_index) {
+                restrm->dts_strtin.audio = av_rescale(restrm->pkt.dts, 1000000
                     ,restrm->ifmt_ctx->streams[restrm->pkt.stream_index]->time_base.den);
             }
         }
 
-        if (restrm->dts_start > 0) break;
+        if ((restrm->dts_strtin.video > 0) &&
+            (restrm->dts_strtin.audio > 0)) {
+            break;
+        }
 
         indx++;
     }
 
     restrm->time_start = av_gettime_relative();
 
-    restrm->dts_last_video = restrm->dts_start;
-    restrm->dts_last_audio = restrm->dts_start;
+    restrm->dts_lstin.video = restrm->dts_strtin.video;
+    restrm->dts_lstin.audio = restrm->dts_strtin.audio;
 
-    restrm->dts_base_video =- restrm->dts_start;
-    restrm->dts_base_audio =- restrm->dts_start;
+    int64_t mx;
+    mx = restrm->dts_lstout.audio;
+    if (restrm->dts_lstout.video > mx) {
+        mx = restrm->dts_lstout.video;
+    }
+
+    /*
+    fprintf(stderr
+        ,"%s: set infile"
+        " dts_out.audio: %ld dts_out.video:%ld"
+        " audio_dts_out: %ld video_dts_out:%ld"
+        " mx:%ld dts_st:%ld"
+        " \n"
+        , restrm->guide_info->guide_displayname
+        , restrm->dts_out.audio, restrm->dts_out.video
+        , restrm->dts_lstout.audio, restrm->dts_lstout.video
+        , mx,restrm->dts_strtin.video
+        );
+    */
+
+    restrm->dts_out.audio = mx;
+    restrm->dts_out.video = mx;
+    restrm->dts_lstout.audio = mx;
+    restrm->dts_lstout.video = mx;
 
     snprintf(restrm->function_name, 1024,"%s","infile_init 05");
     restrm->watchdog_playlist = av_gettime_relative() + 5000000;
@@ -180,11 +210,8 @@ void infile_close(ctx_restream *restrm){
     if (restrm->stream_ctx != NULL) free(restrm->stream_ctx);
     avformat_close_input(&restrm->ifmt_ctx);
     restrm->ifmt_ctx = NULL;
-    //fprintf(stderr, "%s: Input closed \n"
-    //        ,restrm->guide_info->guide_displayname);
-
-    restrm->dts_base_video = restrm->dts_last_video + 1;
-    restrm->dts_base_audio = restrm->dts_last_audio + 1;
+//    fprintf(stderr, "%s: Input closed \n"
+//            ,restrm->guide_info->guide_displayname);
 
 }
 
@@ -203,8 +230,8 @@ void infile_wait(ctx_restream *restrm){
         if (restrm->pkt.dts != AV_NOPTS_VALUE) {
             dts = av_rescale(restrm->pkt.dts, 1000000
                 ,restrm->ifmt_ctx->streams[restrm->pkt.stream_index]->time_base.den);
-            if (dts < restrm->dts_last_audio) return;
-            restrm->dts_last_audio = dts;
+            if (dts < restrm->dts_lstin.audio) return;
+            restrm->dts_lstin.audio = dts;
         }
         return;
     }
@@ -215,20 +242,29 @@ void infile_wait(ctx_restream *restrm){
         dts = av_rescale(restrm->pkt.dts, 1000000
             ,restrm->ifmt_ctx->streams[restrm->pkt.stream_index]->time_base.den);
 
-        if (dts < restrm->dts_last_video) return;
-        restrm->dts_last_video = dts;
-
-        tm_diff = av_gettime_relative() - restrm->connect_start;
-        if ((tm_diff <2000000) && (restrm->pipe_state == PIPE_IS_OPEN)) return;
+        if (dts < restrm->dts_lstin.video) return;
+        restrm->dts_lstin.video = dts;
 
         /* How much time has really elapsed since the start of movie*/
         tm_diff = av_gettime_relative() - restrm->time_start;
 
         /* How much time the dts wants us to be at since the start of the movie */
-        dts_diff = dts - restrm->dts_start;
+        dts_diff = dts - restrm->dts_strtin.video;
 
         /* How much time we need to wait to get in sync*/
         tot_diff = dts_diff - tm_diff;
+
+        /*
+        fprintf(stderr
+            ,"%s: Return "
+            " dts_lstin.video: %ld pkt.dts:%ld"
+            " dts_strtin.video: %ld totdiff:%ld \n"
+            , restrm->guide_info->guide_displayname
+            , restrm->dts_lstin.video, restrm->pkt.dts
+            , restrm->dts_strtin.video, tot_diff
+            );
+        */
+
         if (tot_diff > 0){
             if (tot_diff < 1000000){
                 snprintf(restrm->function_name,1024,"%s %ld","infile_wait",tot_diff);
@@ -238,21 +274,21 @@ void infile_wait(ctx_restream *restrm){
                 if (restrm->pipe_state == PIPE_NEEDS_RESET ){
                     fprintf(stderr
                         ,"%s: Excessive wait time "
-                        " dts_last: %ld pkt.dts:%ld"
-                        " dts_start: %ld dts_base:%ld"
+                        " dts_in_last: %ld pkt.dts:%ld"
+                        " dts_strtin.video: %ld dts_base:%ld"
                         " tm_diff: %ld dts_diff: %ld tot_diff: %ld\n"
                         , restrm->guide_info->guide_displayname
-                        , restrm->dts_last, restrm->pkt.dts
-                        , restrm->dts_start, restrm->dts_base
+                        , restrm->dts_in_last, restrm->pkt.dts
+                        , restrm->dts_strtin.video, restrm->dts_base
                         , tm_diff, dts_diff, tot_diff
                         );
                 }
                 */
                 /* reset all our times to see if we can get in sync*/
                 restrm->time_start = av_gettime_relative();
-                restrm->dts_start = av_rescale(restrm->pkt.dts, 1000000
+                restrm->dts_strtin.video = av_rescale(restrm->pkt.dts, 1000000
                     ,restrm->ifmt_ctx->streams[restrm->pkt.stream_index]->time_base.den);
-                restrm->dts_last_video = restrm->dts_start;
+                restrm->dts_lstin.video = restrm->dts_strtin.video;
             }
         }
     }

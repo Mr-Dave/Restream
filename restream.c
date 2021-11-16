@@ -112,11 +112,10 @@ void output_checkpipe(ctx_restream *restrm){
     snprintf(restrm->function_name,1024,"%s","output_checkpipe");
 
     pipefd = open(restrm->out_filename, O_WRONLY | O_NONBLOCK);
-    if (pipefd == -1 ){
-
-        if (errno == ENXIO){
+    if (pipefd == -1 ) {
+        if (errno == ENXIO) {
             restrm->pipe_state = PIPE_IS_CLOSED;
-        } else if (errno == ENOENT){
+        } else if (errno == ENOENT) {
             fprintf(stderr, "%s: Error: No such pipe %s\n", restrm->out_filename
                 ,restrm->guide_info->guide_displayname);
             restrm->pipe_state = PIPE_IS_CLOSED;
@@ -169,7 +168,8 @@ void output_pipestatus(ctx_restream *restrm){
                 restrm->pipe_state = PIPE_NEEDS_RESET;
                 return;
             }
-            fprintf(stderr,"%s: New Connection\n",restrm->guide_info->guide_displayname);
+            fprintf(stderr,"%s: New connection\n"
+                ,restrm->guide_info->guide_displayname);
             restrm->connect_start = av_gettime_relative();
             restrm->pipe_state = PIPE_IS_OPEN;
         }
@@ -194,8 +194,6 @@ void *process_playlist(void *parms){
     reader_init(restrm);
 
     finish_playlist = 0;
-    restrm->dts_base_audio = 10000;
-    restrm->dts_base_video = 10000;
     restrm->connect_start = 0;
 
     while (!finish_playlist){
@@ -249,6 +247,7 @@ void *process_playlist(void *parms){
             writer_close(restrm);
 
             infile_close(restrm);
+            restrm->pipe_state = PIPE_NEEDS_RESET;
 
             restrm->playlist_index ++;
             restrm->watchdog_playlist = av_gettime_relative();
@@ -323,6 +322,8 @@ void *channel_process(void *parms){
     restrm->reader_status = READER_STATUS_INACTIVE;
     restrm->playlist_index = 0;
     restrm->soft_restart = 1;
+    restrm->dts_lstout.audio = 1;
+    restrm->dts_lstout.video = 1;
 
     av_init_packet(&restrm->pkt);
     restrm->pkt.data = NULL;

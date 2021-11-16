@@ -56,14 +56,20 @@ int writer_init_video(ctx_restream *restrm, int indx) {
     enc_ctx->width = dec_ctx->width;
     enc_ctx->height = dec_ctx->height;
     enc_ctx->time_base = dec_ctx->time_base;
-    enc_ctx->pix_fmt = dec_ctx->pix_fmt;
+    if (dec_ctx->pix_fmt == -1) {
+        enc_ctx->pix_fmt = AV_PIX_FMT_YUV420P;
+    } else {
+        enc_ctx->pix_fmt = dec_ctx->pix_fmt;
+    }
 
     retcd = avcodec_open2(enc_ctx, encoder, NULL);
     if (retcd < 0) {
         fprintf(stderr, "%s: Could not open video encoder\n", restrm->guide_info->guide_displayname);
-        fprintf(stderr, "%s: %dx%d\n"
+        fprintf(stderr, "%s: %dx%d %d %d\n"
             , restrm->guide_info->guide_displayname
-            , enc_ctx->width, enc_ctx->height);
+            , enc_ctx->width, enc_ctx->height
+            , enc_ctx->pix_fmt
+            , enc_ctx->time_base.den);
         return -1;
     }
 
@@ -180,6 +186,12 @@ void writer_close(ctx_restream *restrm) {
     snprintf(restrm->function_name, 1024, "%s", "writer_close");
     restrm->watchdog_playlist = av_gettime_relative();
 
+    /*
+    fprintf(stderr,"%s: writer_close enter\n"
+        , restrm->guide_info->guide_displayname
+        );
+    */
+
     reader_start(restrm);
 
     if (restrm->ofmt_ctx) {
@@ -195,6 +207,11 @@ void writer_close(ctx_restream *restrm) {
 
     restrm->pipe_state = PIPE_IS_CLOSED;
 
+    /*
+    fprintf(stderr,"%s: writer_close exit\n"
+        , restrm->guide_info->guide_displayname
+        );
+    */
 }
 
 int writer_init(ctx_restream *restrm) {
@@ -204,6 +221,12 @@ int writer_init(ctx_restream *restrm) {
 
     snprintf(restrm->function_name, 1024, "%s", "writer_init");
     restrm->watchdog_playlist = av_gettime_relative();
+
+    /*
+    fprintf(stderr,"%s: writer_init enter\n"
+        , restrm->guide_info->guide_displayname
+        );
+    */
 
     if (restrm->ifmt_ctx == NULL) {
         fprintf(stderr, "%s: no input file provided\n", restrm->guide_info->guide_displayname);
@@ -242,6 +265,12 @@ int writer_init(ctx_restream *restrm) {
 
     av_dump_format(restrm->ofmt_ctx, 0, restrm->out_filename, 1);
 
+    /*
+    fprintf(stderr,"%s: writer_init exit\n"
+        , restrm->guide_info->guide_displayname
+        );
+    */
+
     return 0;
 }
 
@@ -252,6 +281,12 @@ int writer_init_open(ctx_restream *restrm) {
 
     snprintf(restrm->function_name, 1024, "%s", "writer_init_open");
     restrm->watchdog_playlist = av_gettime_relative();
+
+    /*
+    fprintf(stderr,"%s: writer_init_open enter\n"
+        , restrm->guide_info->guide_displayname
+        );
+    */
 
     retcd = avio_open(&restrm->ofmt_ctx->pb, restrm->out_filename, AVIO_FLAG_WRITE);
     if (retcd < 0) {
@@ -276,44 +311,64 @@ int writer_init_open(ctx_restream *restrm) {
         return -1;
     }
 
+    /*
+    fprintf(stderr,"%s: writer_init_open exit\n"
+        , restrm->guide_info->guide_displayname
+        );
+    */
+
     return 0;
 }
-
-
 
 void writer_packet(ctx_restream *restrm) {
 
     int retcd, indx;
-    int64_t base_tmp;
+    int64_t new_ts;
 
     snprintf(restrm->function_name, 1024, "%s", "writer_packet");
     restrm->watchdog_playlist = av_gettime_relative();
 
-    if (restrm->pkt.stream_index == restrm->video_index) {
-        base_tmp = av_rescale(restrm->dts_base_video
-            , restrm->ofmt_ctx->streams[restrm->pkt.stream_index]->time_base.den
-            , 1000000);
-    } else {
-        base_tmp = av_rescale(restrm->dts_base_audio
-            , restrm->ofmt_ctx->streams[restrm->pkt.stream_index]->time_base.den
-            , 1000000);
+    if ((restrm->pkt.stream_index != restrm->video_index) &&
+        (restrm->pkt.stream_index != restrm->audio_index)) {
+        return;
     }
 
-    if (restrm->pkt.pts != AV_NOPTS_VALUE) restrm->pkt.pts += base_tmp;
-    if (restrm->pkt.dts != AV_NOPTS_VALUE) restrm->pkt.dts += base_tmp;
-
-    //retcd = av_interleaved_write_frame(restrm->ofmt_ctx, &restrm->pkt);
-    retcd = av_write_frame(restrm->ofmt_ctx, &restrm->pkt);
-
-    /*
-    if ((av_gettime_relative() - restrm->connect_start) <1000000) {
-        for (indx=0; indx<=5; indx++){
-            if (restrm->pkt.pts != AV_NOPTS_VALUE) restrm->pkt.pts++;
-            if (restrm->pkt.dts != AV_NOPTS_VALUE) restrm->pkt.dts++;
-            retcd = av_write_frame(restrm->ofmt_ctx, &restrm->pkt);
+    if (restrm->pkt.pts != AV_NOPTS_VALUE) {
+        if (restrm->pkt.stream_index == restrm->video_index) {
+            new_ts = av_rescale(restrm->pkt.pts, 1000
+                , restrm->ifmt_ctx->streams[restrm->pkt.stream_index]->time_base.den)
+                - av_rescale(restrm->dts_strtin.video, 1000, 1000000)
+                + restrm->dts_out.video;
+            restrm->pkt.pts = new_ts;
+        } else {
+            new_ts = av_rescale(restrm->pkt.pts, 1000
+                , restrm->ifmt_ctx->streams[restrm->pkt.stream_index]->time_base.den)
+                - av_rescale(restrm->dts_strtin.video, 1000, 1000000)
+                + restrm->dts_out.audio;
+            restrm->pkt.pts = new_ts;
         }
     }
-    */
+
+    if (restrm->pkt.dts != AV_NOPTS_VALUE) {
+        if (restrm->pkt.stream_index == restrm->video_index) {
+            new_ts = av_rescale(restrm->pkt.dts, 1000
+                , restrm->ifmt_ctx->streams[restrm->pkt.stream_index]->time_base.den)
+                - av_rescale(restrm->dts_strtin.video, 1000, 1000000)
+                + restrm->dts_out.video;
+            restrm->dts_lstout.video = new_ts;
+            restrm->pkt.dts = new_ts;
+        } else {
+            new_ts = av_rescale(restrm->pkt.dts, 1000
+                , restrm->ifmt_ctx->streams[restrm->pkt.stream_index]->time_base.den)
+                - av_rescale(restrm->dts_strtin.video, 1000, 1000000)
+                + restrm->dts_out.audio;
+            restrm->dts_lstout.audio = new_ts;
+            restrm->pkt.dts = new_ts;
+        }
+    }
+
+    //retcd = av_write_frame(restrm->ofmt_ctx, &restrm->pkt);
+    retcd = av_interleaved_write_frame(restrm->ofmt_ctx, &restrm->pkt);
 
     if (retcd < 0){
         //fprintf(stderr, "%s: write packet: reset \n", restrm->guide_info->guide_displayname);

@@ -68,6 +68,11 @@
         AVCodecContext      *enc_ctx;
     } StreamContext;
 
+    struct ts_item {
+        int64_t audio;
+        int64_t video;
+    };
+
     struct guide_item {
         char   *movie1_filename;
         char   *movie2_filename;
@@ -100,11 +105,10 @@
         int                     stream_count;
 
         int64_t                 time_start;
-        int64_t                 dts_start;
-        int64_t                 dts_last_audio;
-        int64_t                 dts_last_video;
-        int64_t                 dts_base_audio;
-        int64_t                 dts_base_video;
+        struct ts_item          dts_strtin;
+        struct ts_item          dts_lstin;
+        struct ts_item          dts_out;
+        struct ts_item          dts_lstout;
 
         unsigned int            rand_seed;
 

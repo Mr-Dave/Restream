@@ -8,8 +8,8 @@
 #include "writer.h"
 
 
-void *reader(void *parms){
-
+void *reader(void *parms)
+{
     /* This function runs on its own thread and monitors the pipe */
 
     int pipefd_r;
@@ -99,7 +99,13 @@ void *reader(void *parms){
     pthread_exit(NULL);
 }
 
-void reader_start(ctx_restream *restrm){
+void reader_start(ctx_restream *restrm)
+{
+    /*
+    fprintf(stderr,"%s: reader_start enter %d \n"
+        ,restrm->guide_info->guide_displayname
+        ,restrm->reader_status);
+    */
 
     if (restrm->reader_status != READER_STATUS_READING){
         pthread_mutex_lock(&restrm->mutex_reader);
@@ -108,9 +114,20 @@ void reader_start(ctx_restream *restrm){
         pthread_mutex_unlock(&restrm->mutex_reader);
     }
 
+    /* 
+    fprintf(stderr,"%s: reader_start exit %d \n"
+        ,restrm->guide_info->guide_displayname
+        ,restrm->reader_status);
+    */
 }
 
-void reader_startbyte(ctx_restream *restrm){
+void reader_startbyte(ctx_restream *restrm) 
+{
+    /*
+    fprintf(stderr,"%s: reader_startbyte enter %d \n"
+        ,restrm->guide_info->guide_displayname
+        ,restrm->reader_status);
+    */
 
     if (restrm->reader_status != READER_STATUS_READBYTE){
         pthread_mutex_lock(&restrm->mutex_reader);
@@ -119,18 +136,40 @@ void reader_startbyte(ctx_restream *restrm){
         pthread_mutex_unlock(&restrm->mutex_reader);
     }
 
+    /*
+    fprintf(stderr,"%s: reader_startbyte exit %d \n"
+        ,restrm->guide_info->guide_displayname
+        ,restrm->reader_status);
+    */
 }
 
-void reader_close(ctx_restream *restrm){
+void reader_close(ctx_restream *restrm)
+{
+    /*
+    fprintf(stderr,"%s: reader_close enter %d \n"
+        ,restrm->guide_info->guide_displayname
+        ,restrm->reader_status);
+    */
 
     pthread_mutex_lock(&restrm->mutex_reader);
         restrm->reader_action = READER_ACTION_CLOSE;
         while (restrm->reader_status != READER_STATUS_CLOSED);
     pthread_mutex_unlock(&restrm->mutex_reader);
 
+    /*
+    fprintf(stderr,"%s: reader_close exit %d \n"
+        ,restrm->guide_info->guide_displayname
+        ,restrm->reader_status);
+    */
 }
 
-void reader_end(ctx_restream *restrm){
+void reader_end(ctx_restream *restrm)
+{
+    /*
+    fprintf(stderr,"%s: reader_end enter %d \n"
+        ,restrm->guide_info->guide_displayname
+        ,restrm->reader_status);
+    */
 
     pthread_mutex_lock(&restrm->mutex_reader);
         restrm->reader_action = READER_ACTION_END;
@@ -139,9 +178,20 @@ void reader_end(ctx_restream *restrm){
 
     pthread_mutex_destroy(&restrm->mutex_reader);
 
+    /*
+    fprintf(stderr,"%s: reader_end exit %d \n"
+        ,restrm->guide_info->guide_displayname
+        ,restrm->reader_status);
+    */
 }
 
-void reader_flush(ctx_restream *restrm){
+void reader_flush(ctx_restream *restrm)
+{
+    /*
+    fprintf(stderr,"%s: reader_flush enter %d \n"
+        ,restrm->guide_info->guide_displayname
+        ,restrm->reader_status);
+    */
 
     snprintf(restrm->function_name,1024,"%s","reader_flush");
 
@@ -151,14 +201,23 @@ void reader_flush(ctx_restream *restrm){
 
     reader_close(restrm);
 
+    /*
+    fprintf(stderr,"%s: reader_flush exit %d \n"
+        ,restrm->guide_info->guide_displayname
+        ,restrm->reader_status);
+    */
 }
 
-void reader_init(ctx_restream *restrm){
+void reader_init(ctx_restream *restrm)
+{
 
     snprintf(restrm->function_name,1024,"%s","reader_init");
 
-    //fprintf(stderr,"%s: reader_init entry %d\n"
-    //    ,restrm->guide_info->guide_displayname,thread_count);
+    /*
+    fprintf(stderr,"%s: reader_init enter %d \n"
+        ,restrm->guide_info->guide_displayname
+        ,restrm->reader_status);
+    */
 
     pthread_mutex_init(&restrm->mutex_reader, NULL);
 
@@ -175,7 +234,9 @@ void reader_init(ctx_restream *restrm){
 
     reader_close(restrm);
 
-    //fprintf(stderr,"%s: reader_init exit %d\n"
-    //    ,restrm->guide_info->guide_displayname,thread_count);
-
+    /*
+    fprintf(stderr,"%s: reader_init exit %d \n"
+        ,restrm->guide_info->guide_displayname
+        ,restrm->reader_status);
+    */
 }
