@@ -1,4 +1,20 @@
-
+/*
+ *    This file is part of Restream.
+ *
+ *    Restream is free software: you can redistribute it and/or modify
+ *    it under the terms of the GNU General Public License as published by
+ *    the Free Software Foundation, either version 3 of the License, or
+ *    (at your option) any later version.
+ *
+ *    Restream is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    GNU General Public License for more details.
+ *
+ *    You should have received a copy of the GNU General Public License
+ *    along with Restream.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ */
 
     #include "restream.h"
     #include "guide.h"
@@ -35,6 +51,9 @@ void playlist_sort_alpha(ctx_restream *restrm){
     char *temp;
     int indx1, indx2;
     snprintf(restrm->function_name,1024,"%s","playlist_sort_alpha");
+    if (finish == TRUE) {
+        return;
+    }
 
     restrm->watchdog_playlist = av_gettime_relative() + 5000000;
 
@@ -59,6 +78,9 @@ void playlist_sort_random(ctx_restream *restrm){
     int indx1, indx2, tmpseq, tmplen;
 
     snprintf(restrm->function_name,1024,"%s","playlist_sort_random");
+    if (finish == TRUE) {
+        return;
+    }
 
     restrm->watchdog_playlist = av_gettime_relative() + 5000000;
 
@@ -113,8 +135,8 @@ int playlist_loaddir(ctx_restream *restrm){
     size_t         basepath_len, totlen;
     int            indx, retcd;
 
+    if (finish == TRUE) return -1;
     snprintf(restrm->function_name,1024,"%s","playlist_loaddir");
-
     restrm->watchdog_playlist = av_gettime_relative() + 5000000;
 
     playlist_free(restrm);

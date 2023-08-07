@@ -1,3 +1,20 @@
+/*
+ *    This file is part of Restream.
+ *
+ *    Restream is free software: you can redistribute it and/or modify
+ *    it under the terms of the GNU General Public License as published by
+ *    the Free Software Foundation, either version 3 of the License, or
+ *    (at your option) any later version.
+ *
+ *    Restream is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    GNU General Public License for more details.
+ *
+ *    You should have received a copy of the GNU General Public License
+ *    along with Restream.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ */
 
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -25,6 +42,9 @@ void guide_names_movie(ctx_restream *restrm){
     char   tmp_str[4096];
 
     snprintf(restrm->function_name,1024,"%s","guide_names_movie");
+    if (finish == TRUE) {
+        return;
+    }
 
     restrm->watchdog_playlist = av_gettime_relative() + 5000000;
 
@@ -80,6 +100,9 @@ void guide_times(ctx_restream *restrm){
     struct tm       *time_info;
 
     snprintf(restrm->function_name,1024,"%s","guide_times");
+    if (finish == TRUE) {
+        return;
+    }
 
     restrm->watchdog_playlist = av_gettime_relative() + 5000000;
 
@@ -137,6 +160,9 @@ void guide_write(ctx_restream *restrm){
     restrm->watchdog_playlist = av_gettime_relative() + 5000000;
 
     snprintf(restrm->function_name,1024,"%s","guide_write");
+    if (finish == TRUE) {
+        return;
+    }
 
     fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if ( fd == -1) {
@@ -214,6 +240,9 @@ void guide_init(ctx_restream *restrm){
 
     int buff_max = 4096;
     snprintf(restrm->function_name,1024,"%s","guide_init");
+    if (finish == TRUE) {
+        return;
+    }
 
     restrm->watchdog_playlist = av_gettime_relative() + 5000000;
 
@@ -250,6 +279,9 @@ void guide_names_guide(ctx_restream *restrm){
     char   dot = '.';
 
     snprintf(restrm->function_name,1024,"%s","guide_names_guide");
+    if (finish == TRUE) {
+        return;
+    }
 
     restrm->watchdog_playlist = av_gettime_relative() + 5000000;
 
@@ -289,6 +321,9 @@ void guide_process(ctx_restream *restrm){
     }
 
     snprintf(restrm->function_name,1024,"%s","guide_process");
+    if (finish == TRUE) {
+        return;
+    }
 
     guide_names_movie(restrm);
 

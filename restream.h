@@ -1,3 +1,21 @@
+/*
+ *    This file is part of Restream.
+ *
+ *    Restream is free software: you can redistribute it and/or modify
+ *    it under the terms of the GNU General Public License as published by
+ *    the Free Software Foundation, either version 3 of the License, or
+ *    (at your option) any later version.
+ *
+ *    Restream is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    GNU General Public License for more details.
+ *
+ *    You should have received a copy of the GNU General Public License
+ *    along with Restream.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ */
+
 #ifndef _INCLUDE_RESTREAM_H_
     #define _INCLUDE_RESTREAM_H_
 
@@ -95,8 +113,8 @@
         char                    *out_filename;
         AVFormatContext         *ifmt_ctx;
         AVFormatContext         *ofmt_ctx;
-        AVOutputFormat          *ofmt;
-        AVPacket                pkt;
+        const AVOutputFormat    *ofmt;
+        AVPacket                *pkt;
 
         int                     stream_index;
         int                     audio_index;
@@ -105,17 +123,21 @@
         int                     stream_count;
 
         int64_t                 time_start;
-        struct ts_item          dts_strtin;
-        struct ts_item          dts_lstin;
-        struct ts_item          dts_out;
-        struct ts_item          dts_lstout;
+        struct ts_item          pts_strtin;
+        struct ts_item          pts_lstin;
+
+        struct ts_item          ts_out;    /* Last ts written to output file*/
+        struct ts_item          ts_base;   /* Starting ts for the output file*/
+        struct ts_item          ts_file;
+
+        //struct ts_item          ts_lstout;
 
         unsigned int            rand_seed;
 
         struct playlist_item    *playlist;
         char                    *playlist_dir;
-        char           *function_name;
-        int                     finish;
+        char                    *function_name;
+        volatile int            finish_thread;
         int                     playlist_count;
         int                     playlist_index;
         char                    *playlist_sort_method;   //a =alpha, r = random
@@ -142,7 +164,8 @@
         struct channel_item   *channel_info;
         int                    channel_count;
     };
-
+    extern volatile int finish;
     int restrm_interrupt(void *ctx);
 
 #endif
+

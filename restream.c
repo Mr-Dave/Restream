@@ -1,35 +1,19 @@
 /*
- * This program used as the starting point the trancoding example as
- * provided by the FFmpeg project.  As such, the copyright notices and
- * notifications associated with that starting example are included below.
+ *    This file is part of Restream.
  *
- * Copyright (c) 2010 Nicolas George
- * Copyright (c) 2011 Stefano Sabatini
- * Copyright (c) 2014 Andrey Utkin
+ *    Restream is free software: you can redistribute it and/or modify
+ *    it under the terms of the GNU General Public License as published by
+ *    the Free Software Foundation, either version 3 of the License, or
+ *    (at your option) any later version.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
+ *    Restream is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    GNU General Public License for more details.
  *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
+ *    You should have received a copy of the GNU General Public License
+ *    along with Restream.  If not, see <https://www.gnu.org/licenses/>.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
-
-/**
- * @file
- * API example for demuxing, decoding, filtering, encoding and muxing
- * @example transcoding.c
  */
 
 #include "restream.h"
@@ -39,8 +23,8 @@
 #include "reader.h"
 #include "writer.h"
 
-int finish;
-int thread_count;
+volatile int thread_count;
+volatile int finish;
 
 
 void signal_handler(int signo){
@@ -109,6 +93,7 @@ void output_checkpipe(ctx_restream *restrm){
 
     int pipefd;
 
+    if (finish == TRUE) return;
     snprintf(restrm->function_name,1024,"%s","output_checkpipe");
 
     pipefd = open(restrm->out_filename, O_WRONLY | O_NONBLOCK);
@@ -130,7 +115,6 @@ void output_checkpipe(ctx_restream *restrm){
     }
 
     return;
-
 }
 
 void output_pipestatus(ctx_restream *restrm){
@@ -138,10 +122,8 @@ void output_pipestatus(ctx_restream *restrm){
     int retcd;
     int64_t tmnow;
 
-    if (finish) return;
-
+    if (finish == TRUE) return;
     snprintf(restrm->function_name,1024,"%s","output_pipestatus");
-
     restrm->watchdog_playlist = av_gettime_relative();
 
     if (restrm->pipe_state == PIPE_NEEDS_RESET ){
@@ -158,7 +140,6 @@ void output_pipestatus(ctx_restream *restrm){
     } else if (restrm->pipe_state == PIPE_IS_CLOSED) {
         output_checkpipe(restrm);
         if (restrm->pipe_state == PIPE_IS_OPEN) {
-
             /* If was closed and now is being indicated as open
              * then we have a new connection. */
             retcd = writer_init_open(restrm);
@@ -196,7 +177,7 @@ void *process_playlist(void *parms){
     finish_playlist = 0;
     restrm->connect_start = 0;
 
-    while (!finish_playlist){
+    while (finish_playlist == FALSE) {
         retcd = playlist_loaddir(restrm);
         if (retcd == -1) finish_playlist = 1;
 
@@ -206,13 +187,6 @@ void *process_playlist(void *parms){
             restrm->in_filename = restrm->playlist[restrm->playlist_index].movie_path;
 
             retcd = infile_init(restrm);
-            if (retcd == 0){
-                reader_start(restrm);
-                retcd = writer_init(restrm);
-                reader_close(restrm);
-            } else {
-                infile_close(restrm);
-            }
 
             if (retcd == 0){
                 restrm->watchdog_playlist = av_gettime_relative();
@@ -220,15 +194,15 @@ void *process_playlist(void *parms){
                     ,restrm->guide_info->guide_displayname
                     ,restrm->in_filename);
                 restrm->connect_start = av_gettime_relative();
-                while (!finish) {
+                while (finish == FALSE) {
+                    av_packet_free(&restrm->pkt);
+                    restrm->pkt = av_packet_alloc();
 
-                    av_packet_unref(&restrm->pkt);
-                    av_init_packet(&restrm->pkt);
-                    restrm->pkt.data = NULL;
-                    restrm->pkt.size = 0;
+                    restrm->pkt->data = NULL;
+                    restrm->pkt->size = 0;
 
                     restrm->watchdog_playlist = av_gettime_relative();
-                    retcd = av_read_frame(restrm->ifmt_ctx, &restrm->pkt);
+                    retcd = av_read_frame(restrm->ifmt_ctx, restrm->pkt);
                     if (retcd < 0) break;
 
                     infile_wait(restrm);
@@ -236,24 +210,26 @@ void *process_playlist(void *parms){
                     output_pipestatus(restrm);
                     if (restrm->pipe_state == PIPE_IS_OPEN) writer_packet(restrm);
 
+                    if (restrm->ifmt_ctx == NULL) break;
+
                     restrm->watchdog_playlist = av_gettime_relative();
 
                 }
-                if (finish) finish_playlist = 1;
             }
 
             restrm->watchdog_playlist = av_gettime_relative();
 
-            writer_close(restrm);
-
             infile_close(restrm);
-            restrm->pipe_state = PIPE_NEEDS_RESET;
 
             restrm->playlist_index ++;
             restrm->watchdog_playlist = av_gettime_relative();
-            if (finish) finish_playlist = 1;
+            if (finish == TRUE) finish_playlist = TRUE;
         }
     }
+
+    infile_close(restrm);
+
+    writer_close(restrm);
 
     reader_end(restrm);
 
@@ -261,13 +237,13 @@ void *process_playlist(void *parms){
         printf("%s: Process playlist exit abnormal %d\n"
             ,restrm->guide_info->guide_displayname,thread_count);
         thread_count--;
-        restrm->finish = 1;
+        restrm->finish_thread = TRUE;
         pthread_exit(NULL);
     } else {
         //printf("%s: Process playlist exit %d\n"
         //    ,restrm->guide_info->guide_displayname,thread_count);
         thread_count--;
-        restrm->finish = 1;
+        restrm->finish_thread = TRUE;
         pthread_exit(NULL);
     }
 
@@ -286,16 +262,16 @@ void *channel_process(void *parms){
 
     chn_item = parms;
 
-    restrm = malloc(sizeof(ctx_restream));
+    restrm = calloc(1, sizeof(ctx_restream));
     memset(restrm,'\0',sizeof(ctx_restream));
     restrm->guide_info = NULL;
 
     chn_item->channel_status= 1;
-    restrm->finish = 0;
-    restrm->function_name = malloc(1024);
-    restrm->playlist_dir = malloc((strlen(chn_item->channel_dir)+2)*sizeof(char));
-    restrm->out_filename = malloc((strlen(chn_item->channel_pipe)+2)*sizeof(char));
-    restrm->playlist_sort_method = malloc((strlen(chn_item->channel_order)+2)*sizeof(char));
+    restrm->finish_thread = FALSE;
+    restrm->function_name = calloc(1,1024);
+    restrm->playlist_dir = calloc((strlen(chn_item->channel_dir)+2),sizeof(char));
+    restrm->out_filename = calloc((strlen(chn_item->channel_pipe)+2),sizeof(char));
+    restrm->playlist_sort_method = calloc((strlen(chn_item->channel_order)+2),sizeof(char));
     restrm->rand_seed = chn_item->channel_seed;
 
     retcd = snprintf(restrm->playlist_dir,strlen(chn_item->channel_dir)+1,"%s",chn_item->channel_dir);
@@ -322,12 +298,15 @@ void *channel_process(void *parms){
     restrm->reader_status = READER_STATUS_INACTIVE;
     restrm->playlist_index = 0;
     restrm->soft_restart = 1;
-    restrm->dts_lstout.audio = 1;
-    restrm->dts_lstout.video = 1;
 
-    av_init_packet(&restrm->pkt);
-    restrm->pkt.data = NULL;
-    restrm->pkt.size = 0;
+    restrm->ts_base.audio = 1;
+    restrm->ts_base.video = 1;
+    restrm->ts_out.audio = 1;
+    restrm->ts_out.video = 1;
+
+    restrm->pkt = av_packet_alloc();
+    restrm->pkt->data = NULL;
+    restrm->pkt->size = 0;
 
     restrm->watchdog_playlist = av_gettime_relative();
 
@@ -335,8 +314,8 @@ void *channel_process(void *parms){
     pthread_attr_setdetachstate(&handler_attribute, PTHREAD_CREATE_DETACHED);
     pthread_create(&restrm->process_playlist_thread, &handler_attribute, process_playlist, restrm);
 
-    while (!restrm->finish){
-        if ((av_gettime_relative() - restrm->watchdog_playlist) > 5000000){
+    while (restrm->finish_thread == FALSE){
+        if ((av_gettime_relative() - restrm->watchdog_playlist) > 50000000){
 
             if (restrm->soft_restart == 1){
                 fprintf(stderr,"%s: Watchdog soft: %s\n"
@@ -389,7 +368,7 @@ void *channel_process(void *parms){
     free(restrm->playlist_sort_method);
     free(restrm->function_name);
 
-    av_packet_unref(&restrm->pkt);
+    av_packet_free(&restrm->pkt);
 
     thread_count--;
 
@@ -418,7 +397,6 @@ int channels_free(struct channel_context *channels, int indx_max)
     }
     free(channels->channel_info);
     free(channels);
-
 }
 
 int channels_init(char *parm_file){
@@ -429,6 +407,7 @@ int channels_init(char *parm_file){
 
     FILE *fp;
     char line_char[4096];
+    char p1[4096], p2[4096], p3[4096];
     int parm_index, parm_start, parm_end;
     int finish_channels;
     pthread_attr_t handler_attribute;
@@ -448,14 +427,12 @@ int channels_init(char *parm_file){
     channels = malloc(sizeof(struct channel_context));
     channels->channel_info = malloc(sizeof(struct channel_item));
     channels->channel_count = 0;
+    memset(line_char, 0, 4096);
 
     while (fgets(line_char, sizeof(line_char), fp) != NULL) {
-
-        channels->channel_info = realloc(channels->channel_info,sizeof(struct channel_item)*(indx+1));
-        channels->channel_info[indx].channel_dir = NULL;
-        channels->channel_info[indx].channel_pipe = NULL;
-        channels->channel_info[indx].channel_order = NULL;
-        channels->channel_info[indx].channel_seed = rand_r(&usec);
+        memset(p1, 0, 4096);
+        memset(p2, 0, 4096);
+        memset(p3, 0, 4096);
 
         parm_end = -1;
         for(parm_index=1; parm_index <= 3; parm_index++){
@@ -464,53 +441,45 @@ int channels_init(char *parm_file){
                 if (line_char[parm_start] == '\"' ) break;
                 parm_start ++;
             }
+
             parm_end = parm_start + 1;
             while (parm_end < sizeof(line_char)) {
                 if (line_char[parm_end] == '\"') break;
                 parm_end ++;
             }
 
-            if (parm_end >= (int)sizeof(line_char) ) {
-                if (parm_index >= 3) free(channels->channel_info[indx].channel_pipe);
-                if (parm_index >= 2) free(channels->channel_info[indx].channel_dir);
-            } else {
-                switch (parm_index){
+            if (parm_end < (int)sizeof(line_char) ) {
+                switch (parm_index) {
                 case 1:
-                    channels->channel_info[indx].channel_dir = calloc((parm_end - parm_start),sizeof(char));
-                    retcd = snprintf(channels->channel_info[indx].channel_dir
-                                ,parm_end - parm_start, "%s", &line_char[parm_start + 1]);
-                    if (retcd < 0){
-                        channels_free(channels,indx);
-                        return -1;
-                    }
+                    retcd = snprintf(p1, parm_end - parm_start, "%s", &line_char[parm_start + 1]);
                     break;
                 case 2:
-                    channels->channel_info[indx].channel_pipe = calloc((parm_end - parm_start),sizeof(char));
-                    retcd = snprintf(channels->channel_info[indx].channel_pipe
-                                ,parm_end - parm_start, "%s", &line_char[parm_start + 1]);
-                    if (retcd < 0){
-                        channels_free(channels,indx);
-                        return -1;
-                    }
+                    retcd = snprintf(p2, parm_end - parm_start, "%s", &line_char[parm_start + 1]);
                     break;
                 case 3:
-                    channels->channel_info[indx].channel_order = calloc((parm_end - parm_start),sizeof(char));
-                    retcd = snprintf(channels->channel_info[indx].channel_order
-                                ,parm_end - parm_start, "%s", &line_char[parm_start + 1]);
-                    if (retcd < 0){
-                        channels_free(channels, indx);
-                        return -1;
-                    }
-                    fprintf(stderr,"test: %s %s %s.\n"
-                        ,channels->channel_info[indx].channel_dir
-                        ,channels->channel_info[indx].channel_pipe
-                        ,channels->channel_info[indx].channel_order);
-
+                    retcd = snprintf(p3, parm_end - parm_start, "%s", &line_char[parm_start + 1]);
                     break;
                 }
             }
         }
-        indx ++;
+
+        if (strlen(p1) > 0 && strlen(p2) > 0 && strlen(p3) > 0) {
+
+            channels->channel_info = realloc(channels->channel_info,sizeof(struct channel_item)*(indx+1));
+
+            channels->channel_info[indx].channel_dir = calloc(strlen(p1) + 1, sizeof(char));
+            sprintf(channels->channel_info[indx].channel_dir, "%s", p1);
+
+            channels->channel_info[indx].channel_pipe = calloc(strlen(p2) + 1, sizeof(char));
+            sprintf(channels->channel_info[indx].channel_pipe, "%s", p2);
+
+            channels->channel_info[indx].channel_order = calloc(strlen(p3) + 1, sizeof(char));
+            sprintf(channels->channel_info[indx].channel_order,"%s", p3);
+
+            channels->channel_info[indx].channel_seed = rand_r(&usec);
+
+            indx ++;
+        }
     }
     channels->channel_count = indx;
 
@@ -530,14 +499,14 @@ int channels_init(char *parm_file){
     }
     pthread_attr_destroy(&handler_attribute);
 
-    finish_channels = 0;
-    while (!finish_channels){
+    finish_channels = FALSE;
+    while (finish_channels == FALSE){
         channels_running = 0;
         for(indx=0; indx < channels->channel_count; indx++){
            channels_running = channels_running + channels->channel_info[indx].channel_status;
         }
         sleep(1);
-        if (channels_running == 0) finish_channels = 1;
+        if (channels_running == 0) finish_channels = TRUE;
     }
 
     channels_free(channels, channels->channel_count);
@@ -546,14 +515,13 @@ int channels_init(char *parm_file){
     return 0;
 }
 
-void ffavlogger(void *var1, int ffav_errnbr, const char *fmt, va_list vlist){
+void logger(void *var1, int ffav_errnbr, const char *fmt, va_list vlist){
     char buff[1024];
 
     vsnprintf(buff,sizeof(buff),fmt, vlist);
     if (ffav_errnbr < AV_LOG_FATAL){
         fprintf(stderr,"ffmpeg error %s \n",buff);
     }
-
 }
 
 int main(int argc, char **argv){
@@ -572,18 +540,18 @@ int main(int argc, char **argv){
 
     signal_setup();
 
-    av_log_set_callback((void *)ffavlogger);
+    av_log_set_callback((void *)logger);
 
     retcd = 0;
     retcd = channels_init(parameter_file);
 
     wait_cnt = 0;
-    while ((thread_count != 0) && (wait_cnt <=500)){
-        SLEEP(0,10000000L);
+    while ((thread_count != 0) && (wait_cnt <=50000)){
+        SLEEP(0,100000L);
         wait_cnt++;
     }
 
-    if (wait_cnt < 500){
+    if (wait_cnt < 50000){
         printf("Exit Normal \n");
     } else {
         printf("Exit.  Waited %d for threads %d \n",wait_cnt, thread_count);

@@ -8,7 +8,13 @@ LIBS = @LIBS@
 
 bin_PROGRAMS = restream
 
-restream_SOURCES = restream.c guide.c infile.c playlist.c reader.c writer.c
+restream_SOURCES = \
+	restream.h restream.c \
+	guide.h guide.c  \
+	infile.h infile.c \
+	playlist.h playlist.c \
+	reader.h reader.c \
+	writer.h writer.c
 
 ###################################################################
 ## Create pristine directories to match exactly distributed files

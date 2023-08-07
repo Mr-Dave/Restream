@@ -1,3 +1,20 @@
+/*
+ *    This file is part of Restream.
+ *
+ *    Restream is free software: you can redistribute it and/or modify
+ *    it under the terms of the GNU General Public License as published by
+ *    the Free Software Foundation, either version 3 of the License, or
+ *    (at your option) any later version.
+ *
+ *    Restream is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    GNU General Public License for more details.
+ *
+ *    You should have received a copy of the GNU General Public License
+ *    along with Restream.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ */
 
 
 #include "restream.h"
@@ -7,11 +24,9 @@
 #include "reader.h"
 #include "writer.h"
 
-
+/* reader function runs on its own thread and monitors the pipe */
 void *reader(void *parms)
 {
-    /* This function runs on its own thread and monitors the pipe */
-
     int pipefd_r;
     char *byte_buffer[4096];
     int reader_active;
@@ -21,9 +36,6 @@ void *reader(void *parms)
     pthread_setname_np(pthread_self(), "OutputReader");
 
     snprintf(restrm->function_name,1024,"%s","reader");
-
-    //fprintf(stderr, "%s: reader started %d\n"
-    //    ,restrm->guide_info->guide_displayname,thread_count);
 
     pipefd_r = 0;
     reader_active = TRUE;
@@ -91,9 +103,6 @@ void *reader(void *parms)
         restrm->watchdog_reader=av_gettime_relative();
     }
 
-    //fprintf(stderr, "%s: reader exit %d\n"
-    //    ,restrm->guide_info->guide_displayname,thread_count);
-
     restrm->reader_status = READER_STATUS_INACTIVE;
 
     pthread_exit(NULL);
@@ -101,123 +110,58 @@ void *reader(void *parms)
 
 void reader_start(ctx_restream *restrm)
 {
-    /*
-    fprintf(stderr,"%s: reader_start enter %d \n"
-        ,restrm->guide_info->guide_displayname
-        ,restrm->reader_status);
-    */
-
     if (restrm->reader_status != READER_STATUS_READING){
         pthread_mutex_lock(&restrm->mutex_reader);
             restrm->reader_action = READER_ACTION_START;
             while (restrm->reader_status != READER_STATUS_READING);
         pthread_mutex_unlock(&restrm->mutex_reader);
     }
-
-    /* 
-    fprintf(stderr,"%s: reader_start exit %d \n"
-        ,restrm->guide_info->guide_displayname
-        ,restrm->reader_status);
-    */
 }
 
-void reader_startbyte(ctx_restream *restrm) 
+void reader_startbyte(ctx_restream *restrm)
 {
-    /*
-    fprintf(stderr,"%s: reader_startbyte enter %d \n"
-        ,restrm->guide_info->guide_displayname
-        ,restrm->reader_status);
-    */
-
     if (restrm->reader_status != READER_STATUS_READBYTE){
         pthread_mutex_lock(&restrm->mutex_reader);
             restrm->reader_action = READER_ACTION_BYTE;
             while (restrm->reader_status != READER_STATUS_READBYTE);
         pthread_mutex_unlock(&restrm->mutex_reader);
     }
-
-    /*
-    fprintf(stderr,"%s: reader_startbyte exit %d \n"
-        ,restrm->guide_info->guide_displayname
-        ,restrm->reader_status);
-    */
 }
 
 void reader_close(ctx_restream *restrm)
 {
-    /*
-    fprintf(stderr,"%s: reader_close enter %d \n"
-        ,restrm->guide_info->guide_displayname
-        ,restrm->reader_status);
-    */
-
     pthread_mutex_lock(&restrm->mutex_reader);
         restrm->reader_action = READER_ACTION_CLOSE;
         while (restrm->reader_status != READER_STATUS_CLOSED);
     pthread_mutex_unlock(&restrm->mutex_reader);
-
-    /*
-    fprintf(stderr,"%s: reader_close exit %d \n"
-        ,restrm->guide_info->guide_displayname
-        ,restrm->reader_status);
-    */
 }
 
 void reader_end(ctx_restream *restrm)
 {
-    /*
-    fprintf(stderr,"%s: reader_end enter %d \n"
-        ,restrm->guide_info->guide_displayname
-        ,restrm->reader_status);
-    */
-
     pthread_mutex_lock(&restrm->mutex_reader);
         restrm->reader_action = READER_ACTION_END;
         while (restrm->reader_status != READER_STATUS_INACTIVE);
     pthread_mutex_unlock(&restrm->mutex_reader);
 
     pthread_mutex_destroy(&restrm->mutex_reader);
-
-    /*
-    fprintf(stderr,"%s: reader_end exit %d \n"
-        ,restrm->guide_info->guide_displayname
-        ,restrm->reader_status);
-    */
 }
 
 void reader_flush(ctx_restream *restrm)
 {
-    /*
-    fprintf(stderr,"%s: reader_flush enter %d \n"
-        ,restrm->guide_info->guide_displayname
-        ,restrm->reader_status);
-    */
-
     snprintf(restrm->function_name,1024,"%s","reader_flush");
+
+    pthread_mutex_unlock(&restrm->mutex_reader);
 
     reader_start(restrm);
 
     sleep(1);
 
     reader_close(restrm);
-
-    /*
-    fprintf(stderr,"%s: reader_flush exit %d \n"
-        ,restrm->guide_info->guide_displayname
-        ,restrm->reader_status);
-    */
 }
 
 void reader_init(ctx_restream *restrm)
 {
-
     snprintf(restrm->function_name,1024,"%s","reader_init");
-
-    /*
-    fprintf(stderr,"%s: reader_init enter %d \n"
-        ,restrm->guide_info->guide_displayname
-        ,restrm->reader_status);
-    */
 
     pthread_mutex_init(&restrm->mutex_reader, NULL);
 
@@ -233,10 +177,4 @@ void reader_init(ctx_restream *restrm)
     pthread_attr_destroy(&handler_attribute);
 
     reader_close(restrm);
-
-    /*
-    fprintf(stderr,"%s: reader_init exit %d \n"
-        ,restrm->guide_info->guide_displayname
-        ,restrm->reader_status);
-    */
 }
