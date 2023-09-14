@@ -16,23 +16,23 @@
  *
  */
 
-#ifndef _INCLUDE_RESTREAM_H_
-    #define _INCLUDE_RESTREAM_H_
-
-    #define _GNU_SOURCE
+#ifndef _INCLUDE_RESTREAM_HPP_
+#define _INCLUDE_RESTREAM_HPP_
 
     #include <pthread.h>
-    #include <libavcodec/avcodec.h>
-    #include <libavformat/avformat.h>
-    #include <libavfilter/buffersink.h>
-    #include <libavfilter/buffersrc.h>
-    #include <libavutil/opt.h>
-    #include <libavutil/imgutils.h>
-    #include <libavutil/pixdesc.h>
-    #include <libavutil/timestamp.h>
-    #include <libavutil/time.h>
-    #include <libavutil/mem.h>
-    #include <libswscale/swscale.h>
+    extern "C" {
+        #include <libavcodec/avcodec.h>
+        #include <libavformat/avformat.h>
+        #include <libavfilter/buffersink.h>
+        #include <libavfilter/buffersrc.h>
+        #include <libavutil/opt.h>
+        #include <libavutil/imgutils.h>
+        #include <libavutil/pixdesc.h>
+        #include <libavutil/timestamp.h>
+        #include <libavutil/time.h>
+        #include <libavutil/mem.h>
+        #include <libswscale/swscale.h>
+    }
     #include <stdio.h>
     #include <stdlib.h>
     #include <dirent.h>
@@ -44,6 +44,11 @@
     #include <signal.h>
     #include <sys/time.h>
     #include <time.h>
+    #include <string>
+    #include <list>
+    #include <vector>
+    #include <iostream>
+    #include <fstream>
 
     #define SLEEP(seconds, nanoseconds) {              \
                     struct timespec tv;                \

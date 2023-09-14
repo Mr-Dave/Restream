@@ -24,12 +24,12 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "restream.h"
-#include "guide.h"
-#include "playlist.h"
-#include "infile.h"
-#include "reader.h"
-#include "writer.h"
+#include "restream.hpp"
+#include "guide.hpp"
+#include "playlist.hpp"
+#include "infile.hpp"
+#include "reader.hpp"
+#include "writer.hpp"
 
 void guide_names_movie(ctx_restream *restrm){
 
@@ -246,25 +246,25 @@ void guide_init(ctx_restream *restrm){
 
     restrm->watchdog_playlist = av_gettime_relative() + 5000000;
 
-    restrm->guide_info = malloc(sizeof(struct guide_item));
+    restrm->guide_info =(guide_item*)malloc(sizeof(struct guide_item));
     memset(restrm->guide_info,'\0',sizeof(struct guide_item));
 
-    restrm->guide_info->movie1_filename  = malloc(buff_max);
+    restrm->guide_info->movie1_filename  =(char*) malloc(buff_max);
     memset(restrm->guide_info->movie1_filename,'\0',buff_max);
 
-    restrm->guide_info->movie1_displayname  = malloc(buff_max);
+    restrm->guide_info->movie1_displayname  = (char*) malloc(buff_max);
     memset(restrm->guide_info->movie1_displayname,'\0',buff_max);
 
-    restrm->guide_info->movie2_filename  = malloc(buff_max);
+    restrm->guide_info->movie2_filename  =(char*) malloc(buff_max);
     memset(restrm->guide_info->movie2_filename,'\0',buff_max);
 
-    restrm->guide_info->movie2_displayname  = malloc(buff_max);
+    restrm->guide_info->movie2_displayname  = (char*)malloc(buff_max);
     memset(restrm->guide_info->movie2_displayname,'\0',buff_max);
 
-    restrm->guide_info->guide_filename  = malloc(buff_max);
+    restrm->guide_info->guide_filename  =(char*) malloc(buff_max);
     memset(restrm->guide_info->guide_filename,'\0',buff_max);
 
-    restrm->guide_info->guide_displayname  = malloc(buff_max);
+    restrm->guide_info->guide_displayname  =(char*) malloc(buff_max);
     memset(restrm->guide_info->guide_displayname,'\0',buff_max);
 
 }

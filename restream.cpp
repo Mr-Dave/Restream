@@ -16,12 +16,12 @@
  *
  */
 
-#include "restream.h"
-#include "guide.h"
-#include "playlist.h"
-#include "infile.h"
-#include "reader.h"
-#include "writer.h"
+#include "restream.hpp"
+#include "guide.hpp"
+#include "playlist.hpp"
+#include "infile.hpp"
+#include "reader.hpp"
+#include "writer.hpp"
 
 volatile int thread_count;
 volatile int finish;
@@ -76,7 +76,7 @@ void signal_setup(){
 }
 
 int restrm_interrupt(void *ctx){
-    ctx_restream *restrm = ctx;
+    ctx_restream *restrm = (ctx_restream *)ctx;
 
     snprintf(restrm->function_name,1024,"%s","restrm_interrupt");
 
@@ -159,7 +159,7 @@ void output_pipestatus(ctx_restream *restrm){
 
 void *process_playlist(void *parms){
 
-    ctx_restream *restrm = parms;
+    ctx_restream *restrm = (ctx_restream *)parms;
     int retcd, finish_playlist;
 
     snprintf(restrm->function_name,1024,"%s","process_playlist");
@@ -260,18 +260,18 @@ void *channel_process(void *parms){
     thread_count++;
     //fprintf(stderr,"channel_process %d\n",thread_count);
 
-    chn_item = parms;
+    chn_item = (channel_item *)parms;
 
-    restrm = calloc(1, sizeof(ctx_restream));
+    restrm = (ctx_restream*)calloc(1, sizeof(ctx_restream));
     memset(restrm,'\0',sizeof(ctx_restream));
     restrm->guide_info = NULL;
 
     chn_item->channel_status= 1;
     restrm->finish_thread = FALSE;
-    restrm->function_name = calloc(1,1024);
-    restrm->playlist_dir = calloc((strlen(chn_item->channel_dir)+2),sizeof(char));
-    restrm->out_filename = calloc((strlen(chn_item->channel_pipe)+2),sizeof(char));
-    restrm->playlist_sort_method = calloc((strlen(chn_item->channel_order)+2),sizeof(char));
+    restrm->function_name = (char*)calloc(1,1024);
+    restrm->playlist_dir = (char*)calloc((strlen(chn_item->channel_dir)+2),sizeof(char));
+    restrm->out_filename = (char*)calloc((strlen(chn_item->channel_pipe)+2),sizeof(char));
+    restrm->playlist_sort_method = (char*)calloc((strlen(chn_item->channel_order)+2),sizeof(char));
     restrm->rand_seed = chn_item->channel_seed;
 
     retcd = snprintf(restrm->playlist_dir,strlen(chn_item->channel_dir)+1,"%s",chn_item->channel_dir);
@@ -380,7 +380,7 @@ void *channel_process(void *parms){
 
 }
 
-int channels_free(struct channel_context *channels, int indx_max)
+static void channels_free(struct channel_context *channels, int indx_max)
 {
     int indx;
 
@@ -399,7 +399,7 @@ int channels_free(struct channel_context *channels, int indx_max)
     free(channels);
 }
 
-int channels_init(char *parm_file){
+int channels_init(const char *parm_file){
 
     int indx, retcd;
     struct channel_context *channels;
@@ -424,8 +424,8 @@ int channels_init(char *parm_file){
     }
 
     indx = 0;
-    channels = malloc(sizeof(struct channel_context));
-    channels->channel_info = malloc(sizeof(struct channel_item));
+    channels =(channel_context*)malloc(sizeof(struct channel_context));
+    channels->channel_info =(channel_item*)malloc(sizeof(struct channel_item));
     channels->channel_count = 0;
     memset(line_char, 0, 4096);
 
@@ -465,15 +465,15 @@ int channels_init(char *parm_file){
 
         if (strlen(p1) > 0 && strlen(p2) > 0 && strlen(p3) > 0) {
 
-            channels->channel_info = realloc(channels->channel_info,sizeof(struct channel_item)*(indx+1));
+            channels->channel_info =(channel_item*) realloc(channels->channel_info,sizeof(struct channel_item)*(indx+1));
 
-            channels->channel_info[indx].channel_dir = calloc(strlen(p1) + 1, sizeof(char));
+            channels->channel_info[indx].channel_dir =(char*)calloc(strlen(p1) + 1, sizeof(char));
             sprintf(channels->channel_info[indx].channel_dir, "%s", p1);
 
-            channels->channel_info[indx].channel_pipe = calloc(strlen(p2) + 1, sizeof(char));
+            channels->channel_info[indx].channel_pipe =(char*) calloc(strlen(p2) + 1, sizeof(char));
             sprintf(channels->channel_info[indx].channel_pipe, "%s", p2);
 
-            channels->channel_info[indx].channel_order = calloc(strlen(p3) + 1, sizeof(char));
+            channels->channel_info[indx].channel_order =(char*) calloc(strlen(p3) + 1, sizeof(char));
             sprintf(channels->channel_info[indx].channel_order,"%s", p3);
 
             channels->channel_info[indx].channel_seed = rand_r(&usec);
@@ -526,7 +526,7 @@ void logger(void *var1, int ffav_errnbr, const char *fmt, va_list vlist){
 
 int main(int argc, char **argv){
 
-    char *parameter_file;
+    std::string parameter_file;
     int   retcd, wait_cnt;
 
     if (argc < 2) {
@@ -540,10 +540,10 @@ int main(int argc, char **argv){
 
     signal_setup();
 
-    av_log_set_callback((void *)logger);
+    av_log_set_callback(logger);
 
     retcd = 0;
-    retcd = channels_init(parameter_file);
+    retcd = channels_init(parameter_file.c_str());
 
     wait_cnt = 0;
     while ((thread_count != 0) && (wait_cnt <=50000)){

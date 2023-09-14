@@ -17,12 +17,12 @@
  */
 
 
-#include "restream.h"
-#include "guide.h"
-#include "playlist.h"
-#include "infile.h"
-#include "reader.h"
-#include "writer.h"
+#include "restream.hpp"
+#include "guide.hpp"
+#include "playlist.hpp"
+#include "infile.hpp"
+#include "reader.hpp"
+#include "writer.hpp"
 
 
 int infile_init(ctx_restream *restrm){
@@ -64,7 +64,7 @@ int infile_init(ctx_restream *restrm){
     restrm->stream_ctx = NULL;
     restrm->stream_count = 0;
     restrm->stream_count = restrm->ifmt_ctx->nb_streams;
-    restrm->stream_ctx = malloc(restrm->stream_count * sizeof(StreamContext));
+    restrm->stream_ctx =(StreamContext*)malloc(restrm->stream_count * sizeof(StreamContext));
     if (!restrm->stream_ctx) {
         fprintf(stderr, "%s:  Failed to allocate space for streams\n"
             ,restrm->guide_info->guide_displayname);

@@ -16,12 +16,12 @@
  *
  */
 
-    #include "restream.h"
-    #include "guide.h"
-    #include "playlist.h"
-    #include "infile.h"
-    #include "reader.h"
-    #include "writer.h"
+    #include "restream.hpp"
+    #include "guide.hpp"
+    #include "playlist.hpp"
+    #include "infile.hpp"
+    #include "reader.hpp"
+    #include "writer.hpp"
 
 int playlist_free(ctx_restream *restrm){
 
@@ -152,13 +152,13 @@ int playlist_loaddir(ctx_restream *restrm){
             }
         }
         if (restrm->playlist_count != 0){
-            restrm->playlist = malloc(sizeof(struct playlist_item) * restrm->playlist_count);
+            restrm->playlist =(playlist_item*) malloc(sizeof(struct playlist_item) * restrm->playlist_count);
             rewinddir(d);
             indx = 0;
             while ((dir=readdir(d)) != NULL){
                 if ((strstr(dir->d_name,".mkv") != NULL) || (strstr(dir->d_name,".mp4") != NULL)) {
                     totlen =basepath_len + strlen(dir->d_name);
-                    restrm->playlist[indx].movie_path = calloc(totlen + 2,sizeof(char));
+                    restrm->playlist[indx].movie_path =(char*)calloc(totlen + 2,sizeof(char));
                     retcd = snprintf(restrm->playlist[indx].movie_path, totlen+1
                         ,"%s%s",restrm->playlist_dir,dir->d_name);
                     if (retcd < 0){

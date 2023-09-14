@@ -17,12 +17,12 @@
  */
 
 
-#include "restream.h"
-#include "guide.h"
-#include "playlist.h"
-#include "infile.h"
-#include "reader.h"
-#include "writer.h"
+#include "restream.hpp"
+#include "guide.hpp"
+#include "playlist.hpp"
+#include "infile.hpp"
+#include "reader.hpp"
+#include "writer.hpp"
 
 /* reader function runs on its own thread and monitors the pipe */
 void *reader(void *parms)
@@ -31,7 +31,7 @@ void *reader(void *parms)
     char *byte_buffer[4096];
     int reader_active;
     ssize_t bytes_read;
-    ctx_restream *restrm = parms;
+    ctx_restream *restrm =(ctx_restream*)parms;
 
     pthread_setname_np(pthread_self(), "OutputReader");
 

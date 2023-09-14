@@ -4,17 +4,19 @@ sysconfdir = @sysconfdir@/$(PACKAGE)
 
 AM_CPPFLAGS= -Dsysconfdir=\"$(sysconfdir)/restream\" -DLOCALEDIR=\"$(DESTDIR)$(localedir)\"
 
+LDADD = $(LIBINTL)
+
 LIBS = @LIBS@
 
 bin_PROGRAMS = restream
 
 restream_SOURCES = \
-	restream.h restream.c \
-	guide.h guide.c  \
-	infile.h infile.c \
-	playlist.h playlist.c \
-	reader.h reader.c \
-	writer.h writer.c
+	restream.hpp restream.cpp \
+	guide.hpp    guide.cpp  \
+	infile.hpp   infile.cpp \
+	playlist.hpp playlist.cpp \
+	reader.hpp   reader.cpp \
+	writer.hpp   writer.cpp
 
 ###################################################################
 ## Create pristine directories to match exactly distributed files

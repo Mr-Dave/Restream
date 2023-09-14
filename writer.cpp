@@ -17,12 +17,12 @@
  */
 
 
-#include "restream.h"
-#include "guide.h"
-#include "playlist.h"
-#include "infile.h"
-#include "reader.h"
-#include "writer.h"
+#include "restream.hpp"
+#include "guide.hpp"
+#include "playlist.hpp"
+#include "infile.hpp"
+#include "reader.hpp"
+#include "writer.hpp"
 
 int writer_init_video(ctx_restream *restrm, int indx) {
 

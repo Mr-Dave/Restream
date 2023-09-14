@@ -16,15 +16,25 @@
  *
  */
 
-#ifndef _INCLUDE_READER_H_
-    #define _INCLUDE_READER_H_
+#ifndef _INCLUDE_PLAYLIST_HPP_
+#define _INCLUDE_PLAYLIST_HPP_
 
-    void *reader(void *parms);
-    void reader_start(ctx_restream *restrm);
-    void reader_startbyte(ctx_restream *restrm);
-    void reader_close(ctx_restream *restrm);
-    void reader_end(ctx_restream *restrm);
-    void reader_flush(ctx_restream *restrm);
-    void reader_init(ctx_restream *restrm);
+    struct playlist_item {
+        char   *movie_path;
+        int    path_length;
+        int    movie_seq;
+    };
+
+    struct channel_item {
+        char         *channel_dir;
+        char         *channel_pipe;
+        char         *channel_order;
+        int          channel_status;
+        unsigned int channel_seed;
+        pthread_t    process_channel_thread;
+    };
+
+    int playlist_loaddir(ctx_restream *restrm);
+    int playlist_free(ctx_restream *restrm);
 
 #endif
