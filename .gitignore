@@ -3,9 +3,9 @@ Makefile.in
 ABOUT-NLS
 compile
 config.guess
-config.h
-config.h.in
-config.h.in~
+config.hpp
+config.hpp.in
+config.hpp.in~
 config.log
 config.rpath
 config.status
@@ -20,10 +20,16 @@ missing
 stamp-h1
 
 *.o
-restream
 .deps/
 *.log
 .depend
+src/*.o
+src/restream
+src/Makefile
+src/Makefile.in
+src/.deps/
+src/Makefile
+src/Makefile.in
 
 .vscode/
 

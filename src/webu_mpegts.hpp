@@ -14,27 +14,14 @@
  *    You should have received a copy of the GNU General Public License
  *    along with Restream.  If not, see <https://www.gnu.org/licenses/>.
  *
- */
+ *    Copyright 2020-2023 MotionMrDave@gmail.com
+*/
 
-#ifndef _INCLUDE_PLAYLIST_HPP_
-#define _INCLUDE_PLAYLIST_HPP_
+#ifndef _INCLUDE_WEBU_MPEGTS_HPP_
+#define _INCLUDE_WEBU_MPEGTS_HPP_
 
-    struct playlist_item {
-        char   *movie_path;
-        int    path_length;
-        int    movie_seq;
-    };
+    mhdrslt webu_stream_main(ctx_webui *webui);
+    mhdrslt webu_mpegts_main(ctx_webui *webui);
+    void webu_mpegts_free_context(ctx_webui *webui);
 
-    struct channel_item {
-        char         *channel_dir;
-        char         *channel_pipe;
-        char         *channel_order;
-        int          channel_status;
-        unsigned int channel_seed;
-        pthread_t    process_channel_thread;
-    };
-
-    int playlist_loaddir(ctx_restream *restrm);
-    int playlist_free(ctx_restream *restrm);
-
-#endif
+#endif /* _INCLUDE_WEBU_MPEGTS_HPP_ */

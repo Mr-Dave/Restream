@@ -19,9 +19,6 @@
 #ifndef _INCLUDE_GUIDE_HPP_
 #define _INCLUDE_GUIDE_HPP_
 
-    void guide_process(ctx_restream *restrm);
-    void guide_init(ctx_restream *restrm);
-    void guide_names_guide(ctx_restream *restrm);
-    void guide_free(ctx_restream *restrm);
+    void guide_process(ctx_channel_item *chitm);
 
 #endif

@@ -1,22 +1,20 @@
 ACLOCAL_AMFLAGS = -I m4
 
-sysconfdir = @sysconfdir@/$(PACKAGE)
-
-AM_CPPFLAGS= -Dsysconfdir=\"$(sysconfdir)/restream\" -DLOCALEDIR=\"$(DESTDIR)$(localedir)\"
+AM_CPPFLAGS= -Dsysconfdir=\"$(sysconfdir)/restream\" -DLOCALEDIR=\"$(localedir)\"
 
 LDADD = $(LIBINTL)
-
-LIBS = @LIBS@
 
 bin_PROGRAMS = restream
 
 restream_SOURCES = \
-	restream.hpp restream.cpp \
-	guide.hpp    guide.cpp  \
-	infile.hpp   infile.cpp \
-	playlist.hpp playlist.cpp \
-	reader.hpp   reader.cpp \
-	writer.hpp   writer.cpp
+	restream.hpp     restream.cpp \
+	logger.hpp       logger.cpp \
+	util.hpp         util.cpp \
+	conf.hpp         conf.cpp \
+	guide.hpp        guide.cpp \
+	infile.hpp       infile.cpp \
+	webu.hpp         webu.cpp \
+	webu_mpegts.hpp  webu_mpegts.cpp
 
 ###################################################################
 ## Create pristine directories to match exactly distributed files

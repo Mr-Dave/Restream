@@ -1,14 +1,13 @@
 AC_INIT(restream,0.01)
 AM_INIT_AUTOMAKE([subdir-objects foreign])
-AM_MAINTAINER_MODE([enable])
 CXXFLAGS="$CXXFLAGS -std=c++17"
 AC_PROG_CC
 AC_PROG_CXX
-AC_USE_SYSTEM_EXTENSIONS
 AC_CONFIG_HEADERS([config.hpp])
 AC_CONFIG_SRCDIR([src/restream.cpp])
 AC_CANONICAL_HOST
 AC_CONFIG_MACRO_DIR([m4])
+
 
 ##############################################################################
 ###  Check pkgconf  - Required.  Needed to get lib paths/info
@@ -23,8 +22,55 @@ AS_IF([test "${PKGCONFIG}" = "no" ],[
 ###  Check pthread
 ##############################################################################
 AC_CHECK_HEADERS(pthread.h,,AC_MSG_ERROR([pthread is required.]))
-TEMP_CFLAGS="-D_THREAD_SAFE"
+CPPFLAGS="${CPPFLAGS} -D_THREAD_SAFE "
 LIBS="$LIBS -pthread "
+
+AC_MSG_CHECKING([for pthread_setname_np])
+AC_LINK_IFELSE(
+  [AC_LANG_PROGRAM([#include <pthread.h>], [pthread_setname_np(pthread_self(), "name")])
+  ],[
+    AC_DEFINE([HAVE_PTHREAD_SETNAME_NP], [1], [Define if you have pthread_setname_np function.])
+    PTHREAD_SETNAME_NP="yes"
+    AC_MSG_RESULT([yes])
+  ],[
+    PTHREAD_SETNAME_NP="no"
+    AC_MSG_RESULT([no])
+  ]
+)
+
+AC_MSG_CHECKING([for pthread_getname_np])
+AC_LINK_IFELSE(
+  [AC_LANG_PROGRAM([#include <pthread.h>], [pthread_getname_np(pthread_self(), NULL, 0)])
+  ],[
+    AC_DEFINE([HAVE_PTHREAD_GETNAME_NP], [1], [Define if you have pthread_getname_np function.])
+    PTHREAD_GETNAME_NP="yes"
+    AC_MSG_RESULT([yes])
+  ],[
+    PTHREAD_GETNAME_NP="no"
+    AC_MSG_RESULT([no])
+  ]
+)
+
+##############################################################################
+###  Check libmicrohttpd - Required.  Needed for stream/webcontrol
+##############################################################################
+AS_IF([pkgconf libmicrohttpd ], [
+    TEMP_CPPFLAGS="$TEMP_CPPFLAGS "`pkgconf --cflags libmicrohttpd`
+    TEMP_LIBS="$TEMP_LIBS "`pkgconf --libs libmicrohttpd`
+  ],[
+    AC_MSG_ERROR([Required package libmicrohttpd-dev not found, please check and install necessary dependencies])
+  ]
+)
+HOLD_CPPFLAGS="$CPPFLAGS"
+CPPFLAGS="$CPPFLAGS $TEMP_CPPFLAGS"
+AC_CHECK_HEADERS(microhttpd.h,[MHTTP="yes"],[MHTTP="no"])
+AC_MSG_CHECKING(libmicrohttpd libraries)
+AC_MSG_RESULT($MHTTP)
+AS_IF([test "${MHTTP}" != "yes" ], [
+    AC_MSG_ERROR([Required package libmicrohttpd-dev not found, please check and install necessary dependencies])
+  ]
+)
+CPPFLAGS="$HOLD_CPPFLAGS"
 
 ##############################################################################
 ###  Check for ffmpeg
@@ -54,7 +100,7 @@ AS_IF([test "${FFMPEG}" = "no"], [
     AC_MSG_CHECKING(for FFmpeg)
     AS_IF([pkgconf $FFMPEG_DEPS], [
         FFMPEG_VER=`pkgconf --modversion libavformat`
-        TEMP_CFLAGS="$TEMP_CFLAGS "`pkgconf --cflags $FFMPEG_DEPS`
+        TEMP_CPPFLAGS="$TEMP_CPPFLAGS "`pkgconf --cflags $FFMPEG_DEPS`
         TEMP_LIBS="$TEMP_LIBS "`pkgconf --libs $FFMPEG_DEPS`
         AC_DEFINE([HAVE_FFMPEG], [1], [Define to 1 if FFMPEG is around])
         AC_MSG_RESULT(yes)
@@ -68,9 +114,11 @@ AS_IF([test "${FFMPEG}" = "no"], [
   ]
 )
 
-AC_SUBST(AM_CFLAGS, "$TEMP_CFLAGS")
-AC_SUBST(AM_LDFLAGS, "$TEMP_LDFLAGS")
+TEMP_CPPFLAGS="$TEMP_CPPFLAGS -W -Wall -Werror -Wextra -Wformat -Wshadow -Wpointer-arith -Wwrite-strings -Winline -Wredundant-decls -Wno-long-long -ggdb -g3"
+
+CPPFLAGS="$CPPFLAGS $TEMP_CPPFLAGS"
 LIBS="$LIBS $TEMP_LIBS"
+LDFLAGS="$TEMP_LDFLAGS"
 
 AC_CONFIG_FILES([
 	Makefile
@@ -88,7 +136,7 @@ echo "      Configure status       "
 echo "      ${PACKAGE_NAME} ${PACKAGE_VERSION}"
 echo "   **************************"
 echo
-echo "CFLAGS: $TEMP_CFLAGS $CFLAGS"
+echo "CPPFLAGS: $CPPFLAGS"
 echo
 echo "LIBS: $LIBS"
 echo

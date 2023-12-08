@@ -25,162 +25,73 @@
 #include <unistd.h>
 
 #include "restream.hpp"
+#include "conf.hpp"
+#include "util.hpp"
+#include "logger.hpp"
 #include "guide.hpp"
-#include "playlist.hpp"
 #include "infile.hpp"
-#include "reader.hpp"
-#include "writer.hpp"
+#include "webu.hpp"
 
-void guide_names_movie(ctx_restream *restrm){
-
-    int indx_list;
-    int    index;
-    int    index_slash = 0;
-    int    index_dot = 0;
-    char   slash = '/';
-    char   dot = '.';
-    char   tmp_str[4096];
-
-    snprintf(restrm->function_name,1024,"%s","guide_names_movie");
-    if (finish == TRUE) {
-        return;
-    }
-
-    restrm->watchdog_playlist = av_gettime_relative() + 5000000;
-
-    /* Names for first movie */
-    indx_list = restrm->playlist_index;
-
-    snprintf(restrm->guide_info->movie1_filename,4096,"%s"
-        ,restrm->playlist[indx_list].movie_path);
-    snprintf(restrm->guide_info->movie1_displayname,4096,"%s"
-        ,restrm->guide_info->movie1_filename);
-
-    index = 0;
-    index_slash = -1;
-    index_dot = strlen(restrm->guide_info->movie1_displayname);
-    while (index < strlen(restrm->guide_info->movie1_displayname)){
-      if (restrm->guide_info->movie1_displayname[index] == slash) index_slash = index;
-      if (restrm->guide_info->movie1_displayname[index] == dot) index_dot = index;
-      index ++;
-    }
-    snprintf(tmp_str,4096,"%s",&restrm->guide_info->movie1_displayname[index_slash + 1]);
-    snprintf(restrm->guide_info->movie1_displayname,4096,"%s",tmp_str);
-    restrm->guide_info->movie1_displayname[index_dot - index_slash -1 ] = '\0';
-
-    /* Names for second movie */
-    indx_list++;
-    if (indx_list >= restrm->playlist_count) indx_list = 0;
-
-    snprintf(restrm->guide_info->movie2_filename,4096,"%s",restrm->playlist[indx_list].movie_path);
-    snprintf(restrm->guide_info->movie2_displayname,4096,"%s",restrm->guide_info->movie2_filename);
-
-    index = 0;
-    index_slash = -1;
-    index_dot = strlen(restrm->guide_info->movie2_displayname);
-    while (index < strlen(restrm->guide_info->movie2_displayname)){
-      if (restrm->guide_info->movie2_displayname[index] == slash) index_slash = index;
-      if (restrm->guide_info->movie2_displayname[index] == dot) index_dot = index;
-      index ++;
-    }
-    snprintf(tmp_str,4096,"%s",&restrm->guide_info->movie2_displayname[index_slash + 1]);
-    snprintf(restrm->guide_info->movie2_displayname,4096,"%s",tmp_str);
-    restrm->guide_info->movie2_displayname[index_dot - index_slash -1 ] = '\0';
-
-
-}
-
-void guide_times(ctx_restream *restrm){
-
+void guide_times(std::string filenm, std::string &time_st,std::string &time_en)
+{
     AVFormatContext *guidefmt_ctx;
     int64_t         dur_time;
-    int64_t         ctx_duration;
     int             retcd;
     time_t          timenow;
     struct tm       *time_info;
+    char            timebuf[1024];
 
-    snprintf(restrm->function_name,1024,"%s","guide_times");
-    if (finish == TRUE) {
+    if (finish == true) {
         return;
     }
-
-    restrm->watchdog_playlist = av_gettime_relative() + 5000000;
 
     dur_time = 0;
-    guidefmt_ctx = NULL;
-    if ((retcd = avformat_open_input(&guidefmt_ctx, restrm->guide_info->movie1_filename, 0, 0)) < 0) {
-        fprintf(stderr, "Could not open input file '%s'\n", restrm->guide_info->movie1_filename);
-        return;
-    }
-    ctx_duration =guidefmt_ctx->duration;
-    dur_time = av_rescale(ctx_duration, 1 , AV_TIME_BASE);
-    avformat_close_input(&guidefmt_ctx);
-    guidefmt_ctx = NULL;
 
     time(&timenow);
     time_info = localtime(&timenow);
-    strftime(restrm->guide_info->time1_st, sizeof(restrm->guide_info->time1_st), "%Y%m%d%H%M%S %z", time_info);
+    strftime(timebuf, sizeof(timebuf), "%Y%m%d%H%M%S %z", time_info);
+    time_st = timebuf;
 
-    timenow = timenow + (int16_t)(dur_time);
-    time_info = localtime(&timenow);
-    strftime(restrm->guide_info->time1_en, sizeof(restrm->guide_info->time1_en), "%Y%m%d%H%M%S %z", time_info);
-    //fprintf(stderr,"duration1 %ld %ld %s %s\n",  ctx_duration,dur_time,restrm->guide_info->time1_st,restrm->guide_info->time1_en);
-
-    /*  Get times for second movie */
-    dur_time = 0;
-    guidefmt_ctx = NULL;
-    if ((retcd = avformat_open_input(&guidefmt_ctx, restrm->guide_info->movie2_filename, 0, 0)) < 0) {
-        fprintf(stderr, "Could not open input file '%s'\n", restrm->guide_info->movie2_filename);
+    guidefmt_ctx = nullptr;
+    retcd = avformat_open_input(&guidefmt_ctx,filenm.c_str(), 0, 0);
+    if (retcd < 0) {
+        time_en = time_st;
+        LOG_MSG(NTC, NO_ERRNO, "Could not open file %s",filenm.c_str());
         return;
     }
-    ctx_duration =guidefmt_ctx->duration;
-    dur_time = av_rescale(ctx_duration, 1 , AV_TIME_BASE);
+    dur_time = av_rescale(guidefmt_ctx->duration, 1 , AV_TIME_BASE);
     avformat_close_input(&guidefmt_ctx);
-    guidefmt_ctx = NULL;
-
-    /* Recall that we set this to the end time of the first movie above */
-    timenow = timenow ;
-    time_info = localtime(&timenow);
-    strftime(restrm->guide_info->time2_st, sizeof(restrm->guide_info->time2_st), "%Y%m%d%H%M%S %z", time_info);
+    guidefmt_ctx = nullptr;
 
     timenow = timenow + (int16_t)(dur_time);
     time_info = localtime(&timenow);
-    strftime(restrm->guide_info->time2_en, sizeof(restrm->guide_info->time2_en), "%Y%m%d%H%M%S %z", time_info);
-    //fprintf(stderr,"duration2 %ld %ld %s %s\n",  ctx_duration,dur_time,restrm->guide_info->time2_st,restrm->guide_info->time2_en);
+    strftime(timebuf, sizeof(timebuf), "%Y%m%d%H%M%S %z", time_info);
+    time_en = timebuf;
 
 }
 
-void guide_write(ctx_restream *restrm){
-
-    struct  sockaddr_un addr;
+void guide_write_xml(ctx_channel_item *chitm, std::string &xml)
+{
+    std::string st1,en1,fl1,dn1;
+    std::string st2,en2,fl2,dn2;
+    std::string gnm;
     char    buf[4096];
-    ssize_t retcnt;
-    int fd,rc;
 
-    restrm->watchdog_playlist = av_gettime_relative() + 5000000;
+    fl1 = chitm->playlist[chitm->playlist_index].fullnm;
+    dn1 = chitm->playlist[chitm->playlist_index].displaynm;
+    guide_times(fl1, st1, en1);
 
-    snprintf(restrm->function_name,1024,"%s","guide_write");
-    if (finish == TRUE) {
-        return;
+    if ((chitm->playlist_index+1) > chitm->playlist_count) {
+        fl2 = chitm->playlist[0].fullnm;
+        dn2 = chitm->playlist[0].displaynm;
+    } else {
+        fl2 = chitm->playlist[chitm->playlist_index].fullnm;
+        dn2 = chitm->playlist[chitm->playlist_index].displaynm;
     }
+    guide_times(fl2, st2, en2);
 
-    fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if ( fd == -1) {
-        fprintf(stderr,"Error creating socket for guide\n");
-        return;
-    }
+    gnm = "channel"+chitm->ch_nbr;
 
-    memset(&addr,'\0', sizeof(addr));
-    addr.sun_family = AF_UNIX;
-    snprintf(addr.sun_path,108,"%s","/home/hts/.hts/tvheadend/epggrab/xmltv.sock");
-    rc = connect(fd, (struct sockaddr*)&addr, sizeof(addr));
-    if (rc == -1) {
-        fprintf(stderr,"Error connecting socket for guide\n");
-        close(fd);
-        return;
-    }
-
-    memset(&buf,'\0',4096);
     snprintf(buf, 4096,
         "<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>\n"
         "<!DOCTYPE tv SYSTEM \"xmlv.dtd\">\n"
@@ -198,137 +109,78 @@ void guide_write(ctx_restream *restrm){
         "    <title lang=\"en\">%s</title>\n"
         "  </programme>\n"
         "</tv>\n"
-        ,restrm->guide_info->guide_displayname
-        ,restrm->guide_info->guide_displayname
-        ,restrm->guide_info->time1_st
-        ,restrm->guide_info->time1_en
-        ,restrm->guide_info->guide_displayname
-        ,restrm->guide_info->movie1_displayname
-        ,restrm->guide_info->guide_displayname
-        ,restrm->guide_info->guide_displayname
-        ,restrm->guide_info->time2_st
-        ,restrm->guide_info->time2_en
-        ,restrm->guide_info->guide_displayname
-        ,restrm->guide_info->movie2_displayname
+
+        ,gnm.c_str(),gnm.c_str()
+        ,st1.c_str(),en1.c_str(),gnm.c_str(),dn1.c_str()
+
+        ,gnm.c_str(),gnm.c_str()
+        ,st2.c_str(),en2.c_str(),gnm.c_str(),dn2.c_str()
     );
 
-    rc = strlen(buf);
-    retcnt = write(fd, buf, rc);
-    if (retcnt != rc){
-        fprintf(stderr,"Error writing socket tried %d wrote %ld\n", rc, retcnt);
+    xml = buf;
+}
+
+void guide_write(ctx_channel_item *chitm)
+{
+    struct  sockaddr_un addr;
+    size_t retcd;
+    int fd, rc;
+    std::string xml;
+
+    if (finish == true) {
+        return;
+    }
+
+    fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if ( fd == -1) {
+        LOG_MSG(NTC, NO_ERRNO, "Error creating socket for the guide");
+        return;
+    }
+
+    memset(&addr,'\0', sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    snprintf(addr.sun_path,108,"%s","/home/hts/.hts/tvheadend/epggrab/xmltv.sock");
+    rc = connect(fd, (struct sockaddr*)&addr, sizeof(addr));
+    if (rc == -1) {
+        LOG_MSG(NTC, NO_ERRNO, "Error connecting socket for the guide");
         close(fd);
         return;
+    }
+
+    guide_write_xml(chitm, xml);
+
+    retcd = (size_t)write(fd, xml.c_str(), xml.length());
+    if (retcd != xml.length()) {
+        LOG_MSG(NTC, NO_ERRNO
+            , "Error writing socket tried %d wrote %ld"
+            , xml.length(), retcd);
     }
     close(fd);
 
 }
 
-void guide_free(ctx_restream *restrm){
-
-    snprintf(restrm->function_name,1024,"%s","guide_free");
-
-    /* Remove any previous allocations for the names */
-    free(restrm->guide_info->movie1_filename);
-    free(restrm->guide_info->movie2_filename);
-    free(restrm->guide_info->movie1_displayname);
-    free(restrm->guide_info->movie2_displayname);
-    free(restrm->guide_info->guide_filename);
-    free(restrm->guide_info->guide_displayname);
-}
-
-void guide_init(ctx_restream *restrm){
-
-    int buff_max = 4096;
-    snprintf(restrm->function_name,1024,"%s","guide_init");
-    if (finish == TRUE) {
-        return;
-    }
-
-    restrm->watchdog_playlist = av_gettime_relative() + 5000000;
-
-    restrm->guide_info =(guide_item*)malloc(sizeof(struct guide_item));
-    memset(restrm->guide_info,'\0',sizeof(struct guide_item));
-
-    restrm->guide_info->movie1_filename  =(char*) malloc(buff_max);
-    memset(restrm->guide_info->movie1_filename,'\0',buff_max);
-
-    restrm->guide_info->movie1_displayname  = (char*) malloc(buff_max);
-    memset(restrm->guide_info->movie1_displayname,'\0',buff_max);
-
-    restrm->guide_info->movie2_filename  =(char*) malloc(buff_max);
-    memset(restrm->guide_info->movie2_filename,'\0',buff_max);
-
-    restrm->guide_info->movie2_displayname  = (char*)malloc(buff_max);
-    memset(restrm->guide_info->movie2_displayname,'\0',buff_max);
-
-    restrm->guide_info->guide_filename  =(char*) malloc(buff_max);
-    memset(restrm->guide_info->guide_filename,'\0',buff_max);
-
-    restrm->guide_info->guide_displayname  =(char*) malloc(buff_max);
-    memset(restrm->guide_info->guide_displayname,'\0',buff_max);
-
-}
-
-void guide_names_guide(ctx_restream *restrm){
-
-    int    indx, indx_en;
-    int    index_slash = 0;
-    int    index_slash2 = 0;
-    int    index_dot = 0;
-    char   slash = '/';
-    char   dot = '.';
-
-    snprintf(restrm->function_name,1024,"%s","guide_names_guide");
-    if (finish == TRUE) {
-        return;
-    }
-
-    restrm->watchdog_playlist = av_gettime_relative() + 5000000;
-
-    index_slash = -1;
-    index_dot = strlen(restrm->out_filename);
-    indx_en =strlen(restrm->out_filename);
-    for (indx=0; indx<=indx_en; indx++){
-      if (restrm->out_filename[indx] == slash) index_slash = indx;
-      if (restrm->out_filename[indx] == dot) index_dot = indx;
-    }
-    snprintf(restrm->guide_info->guide_displayname,index_dot - index_slash
-        ,"%s", &restrm->out_filename[index_slash + 1]);
-
-
-    /* Now we need the directory one level up */
-    index_slash2 = -1;
-    for (indx=0; indx<index_slash;indx++){
-      if (restrm->out_filename[indx] == slash) index_slash2 = indx;
-    }
-    snprintf(restrm->guide_info->guide_filename,4096,"%.*s/guide/%s.xml"
-        ,index_slash2, restrm->out_filename
-        ,restrm->guide_info->guide_displayname);
-
-    //fprintf(stderr,"%s:  Guide file  >%s<\n",restrm->guide_info->guide_displayname,restrm->guide_info->guide_filename);
-
-}
-
-void guide_process(ctx_restream *restrm){
-
+void guide_process(ctx_channel_item *chitm)
+{
     struct stat sdir;
     int retcd;
+    std::string xml;
+
+    if (finish == true) {
+        return;
+    }
 
     /* Determine if we are on the test machine */
     retcd = stat("/home/hts/.hts/tvheadend", &sdir);
     if(retcd < 0) {
+        LOG_MSG(NTC, NO_ERRNO
+            , "Requested tvh guide but the required directory does not exist.");
+        LOG_MSG(NTC, NO_ERRNO
+            , "Printing tvh guide xml to log.");
+        guide_write_xml(chitm, xml);
+        LOG_MSG(NTC, NO_ERRNO, "%s",xml.c_str());
         return;
     }
 
-    snprintf(restrm->function_name,1024,"%s","guide_process");
-    if (finish == TRUE) {
-        return;
-    }
-
-    guide_names_movie(restrm);
-
-    guide_times(restrm);
-
-    guide_write(restrm);
+    guide_write(chitm);
 
 }
