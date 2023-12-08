@@ -169,6 +169,7 @@
         bool        iswritten;
         AVRational  timebase;
         int64_t     start_pts;
+        int64_t     file_cnt;
     };
 
     struct ctx_stream_info {
@@ -211,7 +212,7 @@
 
         ctx_file_info   ifile;
         ctx_file_info   ofile;
-
+        int64_t         file_cnt;
         AVPacket        *pkt;
         AVFrame         *frame;
 

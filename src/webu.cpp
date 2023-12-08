@@ -92,6 +92,7 @@ static void webu_context_init(ctx_app *app, ctx_webui *webui)
     webui->wfile.video = webui->wfile.audio;
     webui->wfile.fmt_ctx = nullptr;
     webui->wfile.time_start = -1;
+    webui->file_cnt = 0;
 
     return;
 }

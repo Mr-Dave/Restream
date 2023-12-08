@@ -76,6 +76,7 @@
 //        struct timespec             start_time;     /* Start time of the mpegts stream*/
 
         ctx_file_info               wfile;
+        int64_t                     file_cnt;
         ctx_channel_item            *chitm;
         int                         channel_indx;   /* Index number of the channel */
         int                         channel_id;     /* channel id number requested */

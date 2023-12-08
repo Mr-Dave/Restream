@@ -138,7 +138,7 @@ void channel_process_setup(ctx_channel_item *chitm)
     chitm->pktarray_lastwritten = -1;
     chitm->pkt = nullptr;
     chitm->cnct_cnt = 0;
-
+    chitm->file_cnt = 0;
 
     pthread_mutex_init(&chitm->mtx_ifmt, NULL);
     pthread_mutex_init(&chitm->mtx_pktarray, NULL);
@@ -178,7 +178,6 @@ void channel_process_defaults(ctx_channel_item *chitm)
     chitm->ifile.fmt_ctx = nullptr;
     chitm->ifile.time_start = -1;
     chitm->ofile = chitm->ifile;
-
 }
 
 void channel_process(ctx_app *app, int chindx)

@@ -150,19 +150,7 @@ void decoder_init(ctx_channel_item *chitm)
             , chitm->ch_nbr.c_str());
         return;
     }
-/*
-    chitm->stream_ctx = NULL;
-    chitm->stream_count = 0;
-    chitm->stream_count = chitm->ifmt_ctx->nb_streams;
-    chitm->stream_ctx =(ctx_codec*)malloc(
-            chitm->stream_count * sizeof(ctx_codec));
-    if (chitm->stream_ctx == nullptr) {
-        LOG_MSG(NTC, NO_ERRNO
-            , "%s:  Failed to allocate space for streams"
-            , chitm->ch_nbr.c_str());
-        return;
-    }
-*/
+
     for (indx = 0; indx < (int)chitm->ifile.fmt_ctx->nb_streams; indx++) {
         strm_typ = chitm->ifile.fmt_ctx->streams[indx]->codecpar->codec_type;
         if ((strm_typ == AVMEDIA_TYPE_VIDEO) &&
@@ -220,7 +208,7 @@ void decoder_get_ts(ctx_channel_item *chitm)
     chitm->ifile.time_start = av_gettime_relative();
     chitm->ifile.audio.last_pts = chitm->ifile.audio.start_pts;
     chitm->ifile.video.last_pts = chitm->ifile.video.start_pts;
-
+    chitm->file_cnt++;
 }
 
 static void infile_wait(ctx_channel_item *chitm)
@@ -387,6 +375,9 @@ static void packetarray_resize(ctx_channel_item *chitm)
     pktitm.iskey = false;
     pktitm.iswritten = false;
     pktitm.packet = nullptr;
+    pktitm.file_cnt = 0;
+    pktitm.start_pts = 0;
+    pktitm.timebase={0,0};
 
     pthread_mutex_lock(&chitm->mtx_pktarray);
         /* 180 = 3 second buffer... usually... */
@@ -472,6 +463,7 @@ static void packetarray_add(ctx_channel_item *chitm, AVPacket *pkt)
             chitm->pktarray[indx_next].iskey = false;
         }
         chitm->pktarray[indx_next].iswritten = false;
+        chitm->pktarray[indx_next].file_cnt = chitm->file_cnt;
         if (chitm->pkt->stream_index == chitm->ifile.video.index) {
             chitm->pktarray[indx_next].timebase = chitm->ifile.video.strm->time_base;
             chitm->pktarray[indx_next].start_pts= chitm->ifile.video.start_pts;
@@ -711,18 +703,67 @@ static void encoder_init_audio(ctx_channel_item *chitm)
     chitm->ofile.fmt_ctx->audio_codec = avcodec_find_encoder(AV_CODEC_ID_AC3);
     stream->codecpar->bit_rate = dec_ctx->bit_rate;
     stream->codecpar->frame_size = dec_ctx->frame_size;
-    av_channel_layout_copy(&stream->codecpar->ch_layout, &dec_ctx->ch_layout);
     stream->codecpar->codec_id=AV_CODEC_ID_AC3;
     stream->codecpar->format = dec_ctx->sample_fmt;
     stream->codecpar->sample_rate = dec_ctx->sample_rate;
     stream->time_base.den  = dec_ctx->sample_rate;
     stream->time_base.num = 1;
+    av_channel_layout_copy(&stream->codecpar->ch_layout, &dec_ctx->ch_layout);
+    stream->codecpar->ch_layout.nb_channels= dec_ctx->ch_layout.nb_channels;
 
+    if (dec_ctx->bit_rate == 0) {
+        enc_ctx->bit_rate = dec_ctx->sample_rate * 10;
+    } else {
+        enc_ctx->bit_rate = dec_ctx->bit_rate;
+    }
+    enc_ctx->frame_size = dec_ctx->frame_size;
+    enc_ctx->sample_fmt = dec_ctx->sample_fmt;
+    enc_ctx->sample_rate = dec_ctx->sample_rate;
+    enc_ctx->time_base.num = 1;
+    enc_ctx->time_base.den  = dec_ctx->sample_rate;
+    av_channel_layout_copy(&enc_ctx->ch_layout, &dec_ctx->ch_layout);
+
+    retcd = avcodec_open2(enc_ctx, encoder, &opts);
+    if (retcd < 0) {
+        av_strerror(retcd, errstr, sizeof(errstr));
+        LOG_MSG(NTC, NO_ERRNO
+            , "%s: Could not open audio encoder %s"
+            , chitm->ch_nbr.c_str(), errstr);
+        abort();
+        return;
+    }
+    av_dict_free(&opts);
 
 /*
+    //#if (MYFFVER >= 57000)
+    // enc_ctx->ch_layout = dec_ctx->ch_layout;
+    //#else
+    //    enc_ctx->channel_layout = dec_ctx->channel_layout;
+    //    enc_ctx->channels = dec_ctx->channels;
+    //#endif
+
+    #if (MYFFVER >= 57000)
+        enc_ctx->ch_layout.nb_channels = 2;
+        //av_channel_layout_copy(&enc_ctx->ch_layout, &dec_ctx->ch_layout);
+    #else
+        enc_ctx->channel_layout = dec_ctx->channel_layout;
+        enc_ctx->channels = dec_ctx->channels;
+    #endif
+    enc_ctx->bit_rate = dec_ctx->bit_rate;
+    enc_ctx->sample_fmt = dec_ctx->sample_fmt;
+    enc_ctx->sample_rate = dec_ctx->sample_rate;
+    enc_ctx->time_base = dec_ctx->time_base;
+    //enc_ctx->time_base.num = 1;
+    //enc_ctx->time_base.den = 90000;
+
     enc_ctx->codec_id = AV_CODEC_ID_AAC;
     enc_ctx->codec= encoder;
 
+    //enc_ctx->pkt_timebase = dec_ctx->pkt_timebase;
+
+    //enc_ctx->strict_std_compliance = FF_COMPLIANCE_EXPERIMENTAL;
+    //enc_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+    //av_dict_set(&opts, "strict", "experimental", 0);
 
     retcd = avcodec_parameters_from_context(stream->codecpar, dec_ctx);
     if (retcd < 0) {
@@ -741,59 +782,6 @@ static void encoder_init_audio(ctx_channel_item *chitm)
     }
 */
 
-    //#if (MYFFVER >= 57000)
-    // enc_ctx->ch_layout = dec_ctx->ch_layout;
-        av_channel_layout_copy(&enc_ctx->ch_layout , &dec_ctx->ch_layout);
-    //#else
-    //    enc_ctx->channel_layout = dec_ctx->channel_layout;
-    //    enc_ctx->channels = dec_ctx->channels;
-    //#endif
-    if (dec_ctx->bit_rate == 0) {
-        enc_ctx->bit_rate = dec_ctx->sample_rate * 10;
-    } else {
-        enc_ctx->bit_rate = dec_ctx->bit_rate;
-    }
-    enc_ctx->frame_size = dec_ctx->frame_size;
-    enc_ctx->sample_fmt = dec_ctx->sample_fmt;
-    enc_ctx->sample_rate = dec_ctx->sample_rate;
-    enc_ctx->time_base.num = 1;
-    enc_ctx->time_base.den  = dec_ctx->sample_rate;
-
-    //enc_ctx->pkt_timebase = dec_ctx->pkt_timebase;
-
-    //enc_ctx->strict_std_compliance = FF_COMPLIANCE_EXPERIMENTAL;
-    //enc_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-    //av_dict_set(&opts, "strict", "experimental", 0);
-    retcd = 0;
-    if (true) {
-        retcd = avcodec_open2(enc_ctx, encoder, &opts);
-    }
-    if (retcd < 0) {
-        av_strerror(retcd, errstr, sizeof(errstr));
-        LOG_MSG(NTC, NO_ERRNO
-            , "%s: Could not open audio encoder %s"
-            , chitm->ch_nbr.c_str(), errstr);
-        abort();
-        return;
-    }
-    av_dict_free(&opts);
-
-/*
-    #if (MYFFVER >= 57000)
-        enc_ctx->ch_layout.nb_channels = 2;
-        //av_channel_layout_copy(&enc_ctx->ch_layout, &dec_ctx->ch_layout);
-    #else
-        enc_ctx->channel_layout = dec_ctx->channel_layout;
-        enc_ctx->channels = dec_ctx->channels;
-    #endif
-    enc_ctx->bit_rate = dec_ctx->bit_rate;
-    enc_ctx->sample_fmt = dec_ctx->sample_fmt;
-    enc_ctx->sample_rate = dec_ctx->sample_rate;
-    enc_ctx->time_base = dec_ctx->time_base;
-    //enc_ctx->time_base.num = 1;
-    //enc_ctx->time_base.den = 90000;
-*/
-
 /*
     retcd = avcodec_parameters_from_context(stream->codecpar, enc_ctx);
     if (retcd < 0) {
@@ -803,7 +791,7 @@ static void encoder_init_audio(ctx_channel_item *chitm)
         return;
     }
 */
-    av_channel_layout_copy(&stream->codecpar->ch_layout, &dec_ctx->ch_layout);
+    //av_channel_layout_copy(&stream->codecpar->ch_layout, &dec_ctx->ch_layout);
 
     return;
 }
@@ -968,5 +956,16 @@ void writer_packet(ctx_channel_item *chitm)
     }
 
 }
+    chitm->stream_ctx = NULL;
+    chitm->stream_count = 0;
+    chitm->stream_count = chitm->ifmt_ctx->nb_streams;
+    chitm->stream_ctx =(ctx_codec*)malloc(
+            chitm->stream_count * sizeof(ctx_codec));
+    if (chitm->stream_ctx == nullptr) {
+        LOG_MSG(NTC, NO_ERRNO
+            , "%s:  Failed to allocate space for streams"
+            , chitm->ch_nbr.c_str());
+        return;
+    }
 
 */
