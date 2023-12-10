@@ -3,13 +3,7 @@ Restream
 
 ## Description
 
-Restream is a program that allows the user to set up their own television channels for 
-use with the TVHeadend application.
+Restream is a program that allows the user to stream as a mpegts their own files from a directory.  Multiple streams can be set up and running at the same time so that they can be used as TV channels to the TVHeadend application.
 
-The set up is a bit manual but the result provides an additional set of channels that 
-randomly play the videos specified in the directory along with being listed in the TV guide.
-
-Right now, this program is for personal use but if other users find it of interest,
-send me a note and I will polish it up for more general use.
 
 
