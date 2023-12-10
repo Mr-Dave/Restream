@@ -337,6 +337,82 @@ static void decoder_receive(ctx_channel_item *chitm)
 
 }
 
+static int encode_buffer_audio(ctx_channel_item *chitm)
+{
+    int frame_size, retcd;
+    int64_t  pts, dts;
+    char errstr[128];
+
+    retcd = av_audio_fifo_realloc(chitm->fifo
+        , chitm->ifile.audio.codec_ctx->frame_size +
+          chitm->ofile.audio.codec_ctx->frame_size);
+    if (retcd < 0) {
+        LOG_MSG(NTC, NO_ERRNO, "%s: Could not allocate FIFO"
+            , chitm->ch_nbr.c_str());
+        return -1;
+    }
+
+    retcd = av_audio_fifo_write(
+        chitm->fifo, (void **)chitm->frame->data
+        , chitm->ifile.audio.codec_ctx->frame_size);
+    if (retcd < chitm->ifile.audio.codec_ctx->frame_size) {
+        LOG_MSG(NTC, NO_ERRNO, "%s: Could not write data to FIFO"
+            , chitm->ch_nbr.c_str());
+        return -1;
+    }
+    pts = chitm->frame->pts;
+    dts = chitm->frame->pkt_dts;
+
+    myframe_free(chitm->frame);
+    chitm->frame = nullptr;
+
+    retcd = av_audio_fifo_size(chitm->fifo);
+    if (retcd < chitm->ofile.audio.codec_ctx->frame_size) {
+        return -1;
+    }
+
+    frame_size = FFMIN(
+        av_audio_fifo_size(chitm->fifo)
+        , chitm->ofile.audio.codec_ctx->frame_size);
+
+    chitm->frame = av_frame_alloc();
+    if (chitm->frame == nullptr) {
+        LOG_MSG(NTC, NO_ERRNO, "%s: Could not allocate output frame"
+            , chitm->ch_nbr.c_str());
+        return -1;
+    }
+    chitm->frame->nb_samples     = frame_size;
+    av_channel_layout_copy(&chitm->frame->ch_layout
+        , &chitm->ofile.audio.codec_ctx->ch_layout);
+    chitm->frame->format         = chitm->ofile.audio.codec_ctx->sample_fmt;
+    chitm->frame->sample_rate    = chitm->ofile.audio.codec_ctx->sample_rate;
+    chitm->frame->pts = pts;
+    chitm->frame->pkt_dts = dts;
+
+    retcd = av_frame_get_buffer(chitm->frame, 0);
+    if (retcd < 0) {
+        av_strerror(retcd, errstr, sizeof(errstr));
+        LOG_MSG(NTC, NO_ERRNO, "%s: Could not allocate output frame buffer %s"
+            , chitm->ch_nbr.c_str(), errstr);
+        av_frame_free(&chitm->frame);
+        chitm->frame = nullptr;
+        return -1;
+    }
+
+    retcd = av_audio_fifo_read(chitm->fifo
+        , (void **)chitm->frame->data, frame_size);
+    if (retcd < frame_size) {
+        fprintf(stderr, "Could not read data from FIFO\n");
+        LOG_MSG(NTC, NO_ERRNO, "%s: Could not read data from fifo"
+            , chitm->ch_nbr.c_str());
+        av_frame_free(&chitm->frame);
+        chitm->frame = nullptr;
+        return -1;
+    }
+
+    return 0;
+}
+
 static void encoder_send(ctx_channel_item *chitm)
 {
     int retcd;
@@ -349,6 +425,12 @@ static void encoder_send(ctx_channel_item *chitm)
     if (chitm->pkt->stream_index == chitm->ifile.video.index) {
         retcd = avcodec_send_frame(chitm->ofile.video.codec_ctx, chitm->frame);
     } else {
+        if (chitm->ifile.audio.codec_ctx->codec_id == AV_CODEC_ID_AAC) {
+            retcd = encode_buffer_audio(chitm);
+            if (retcd < 0) {
+                return;
+            }
+        }
         retcd = avcodec_send_frame(chitm->ofile.audio.codec_ctx, chitm->frame);
     }
     if (retcd < 0 ) {
@@ -369,7 +451,7 @@ static void packetarray_resize(ctx_channel_item *chitm)
     ctx_packet_item pktitm;
     int indx;
 
-    LOG_MSG(ERR, NO_ERRNO, "Resizing array");
+    LOG_MSG(DBG, NO_ERRNO, "Resizing array");
 
     pktitm.idnbr = -1;
     pktitm.iskey = false;
@@ -441,7 +523,7 @@ static void packetarray_add(ctx_channel_item *chitm, AVPacket *pkt)
         chitm->pktnbr++;
         chitm->pktarray[indx_next].idnbr = chitm->pktnbr;
 
-        if (chitm->pktarray[indx_next].packet == nullptr) {
+        if (chitm->pktarray[indx_next].packet != nullptr) {
             mypacket_free(chitm->pktarray[indx_next].packet);
             chitm->pktarray[indx_next].packet = nullptr;
         }
@@ -521,6 +603,8 @@ static void encoder_receive(ctx_channel_item *chitm)
             return;
         } else {
             /* Some files start with negative pts values. */
+            //LOG_MSG(NTC, NO_ERRNO, "%s: adding pkt sz %d"
+            //    , chitm->ch_nbr.c_str(), pkt->size);
             if (pkt->pts > 0) {
                 packetarray_add(chitm, pkt);
             }
@@ -533,6 +617,8 @@ static void encoder_receive(ctx_channel_item *chitm)
 static void process_packet(ctx_channel_item *chitm)
 {
     if (chitm->pkt->stream_index == chitm->ifile.video.index) {
+        //packetarray_add(chitm,chitm->pkt);
+        //return;
         decoder_send(chitm);
         decoder_receive(chitm);
         encoder_send(chitm);
@@ -566,6 +652,7 @@ void infile_read(ctx_channel_item *chitm)
         }
         if (chitm->ifile.fmt_ctx == NULL) break;
     }
+    av_packet_free(&chitm->pkt);
 }
 
 static void encoder_init_video(ctx_channel_item *chitm)
@@ -676,7 +763,13 @@ static void encoder_init_audio(ctx_channel_item *chitm)
     const AVCodec *encoder;
 
     chitm->ofile.audio.codec_ctx = nullptr;
-    encoder = avcodec_find_encoder(AV_CODEC_ID_AC3);
+
+    //if (chitm->ifile.audio.codec_ctx->codec_id == AV_CODEC_ID_AC3 ) {
+        encoder = avcodec_find_encoder(AV_CODEC_ID_AC3);
+    //} else {
+    //    encoder = avcodec_find_encoder(AV_CODEC_ID_AAC);
+        //encoder = avcodec_find_encoder_by_name("libfdk_aac");
+    //}
 
     stream = avformat_new_stream(chitm->ofile.fmt_ctx, encoder);
     chitm->ofile.audio.strm = stream;
@@ -699,17 +792,25 @@ static void encoder_init_audio(ctx_channel_item *chitm)
     enc_ctx = chitm->ofile.audio.codec_ctx;
     dec_ctx = chitm->ifile.audio.codec_ctx;
 
-    chitm->ofile.fmt_ctx->audio_codec_id = AV_CODEC_ID_AC3;
-    chitm->ofile.fmt_ctx->audio_codec = avcodec_find_encoder(AV_CODEC_ID_AC3);
+    //if (dec_ctx->codec_id == AV_CODEC_ID_AC3 ) {
+        chitm->ofile.fmt_ctx->audio_codec_id = AV_CODEC_ID_AC3;
+        chitm->ofile.fmt_ctx->audio_codec = avcodec_find_encoder(AV_CODEC_ID_AC3);
+        stream->codecpar->codec_id=AV_CODEC_ID_AC3;
+    //} else if (dec_ctx->codec_id == AV_CODEC_ID_AAC ) {
+    //    chitm->ofile.fmt_ctx->audio_codec_id = AV_CODEC_ID_AAC;
+    //    stream->codecpar->codec_id=AV_CODEC_ID_AAC;
+    //    chitm->ofile.fmt_ctx->audio_codec = avcodec_find_encoder(AV_CODEC_ID_AAC);
+        //chitm->ofile.fmt_ctx->audio_codec = avcodec_find_encoder_by_name("libfdk_aac");
+    //}
+
     stream->codecpar->bit_rate = dec_ctx->bit_rate;
     stream->codecpar->frame_size = dec_ctx->frame_size;
-    stream->codecpar->codec_id=AV_CODEC_ID_AC3;
     stream->codecpar->format = dec_ctx->sample_fmt;
     stream->codecpar->sample_rate = dec_ctx->sample_rate;
     stream->time_base.den  = dec_ctx->sample_rate;
     stream->time_base.num = 1;
-    av_channel_layout_copy(&stream->codecpar->ch_layout, &dec_ctx->ch_layout);
-    stream->codecpar->ch_layout.nb_channels= dec_ctx->ch_layout.nb_channels;
+    av_channel_layout_default(&stream->codecpar->ch_layout
+        , dec_ctx->ch_layout.nb_channels);
 
     if (dec_ctx->bit_rate == 0) {
         enc_ctx->bit_rate = dec_ctx->sample_rate * 10;
@@ -721,7 +822,18 @@ static void encoder_init_audio(ctx_channel_item *chitm)
     enc_ctx->sample_rate = dec_ctx->sample_rate;
     enc_ctx->time_base.num = 1;
     enc_ctx->time_base.den  = dec_ctx->sample_rate;
-    av_channel_layout_copy(&enc_ctx->ch_layout, &dec_ctx->ch_layout);
+    av_channel_layout_default(&enc_ctx->ch_layout
+        , dec_ctx->ch_layout.nb_channels);
+
+    if (enc_ctx->codec_id == AV_CODEC_ID_AAC ) {
+        enc_ctx->strict_std_compliance = FF_COMPLIANCE_EXPERIMENTAL;
+        enc_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+        av_dict_set(&opts, "strict", "experimental", 0);
+        chitm->ofile.fmt_ctx->strict_std_compliance=FF_COMPLIANCE_EXPERIMENTAL;
+        //enc_ctx->profile =   FF_PROFILE_AAC_MAIN;
+        //enc_ctx->profile =FF_PROFILE_MPEG2_AAC_LOW;
+        enc_ctx->profile =FF_PROFILE_MPEG2_AAC_HE;
+    }
 
     retcd = avcodec_open2(enc_ctx, encoder, &opts);
     if (retcd < 0) {
@@ -734,64 +846,18 @@ static void encoder_init_audio(ctx_channel_item *chitm)
     }
     av_dict_free(&opts);
 
-/*
-    //#if (MYFFVER >= 57000)
-    // enc_ctx->ch_layout = dec_ctx->ch_layout;
-    //#else
-    //    enc_ctx->channel_layout = dec_ctx->channel_layout;
-    //    enc_ctx->channels = dec_ctx->channels;
-    //#endif
 
-    #if (MYFFVER >= 57000)
-        enc_ctx->ch_layout.nb_channels = 2;
-        //av_channel_layout_copy(&enc_ctx->ch_layout, &dec_ctx->ch_layout);
-    #else
-        enc_ctx->channel_layout = dec_ctx->channel_layout;
-        enc_ctx->channels = dec_ctx->channels;
-    #endif
-    enc_ctx->bit_rate = dec_ctx->bit_rate;
-    enc_ctx->sample_fmt = dec_ctx->sample_fmt;
-    enc_ctx->sample_rate = dec_ctx->sample_rate;
-    enc_ctx->time_base = dec_ctx->time_base;
-    //enc_ctx->time_base.num = 1;
-    //enc_ctx->time_base.den = 90000;
-
-    enc_ctx->codec_id = AV_CODEC_ID_AAC;
-    enc_ctx->codec= encoder;
-
-    //enc_ctx->pkt_timebase = dec_ctx->pkt_timebase;
-
-    //enc_ctx->strict_std_compliance = FF_COMPLIANCE_EXPERIMENTAL;
-    //enc_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-    //av_dict_set(&opts, "strict", "experimental", 0);
-
-    retcd = avcodec_parameters_from_context(stream->codecpar, dec_ctx);
-    if (retcd < 0) {
-        LOG_MSG(NTC, NO_ERRNO
-            , "%s: Could not copy parms from decoder"
-            , chitm->ch_nbr.c_str());
-        return;
+    if (dec_ctx->codec_id == AV_CODEC_ID_AAC ) {
+        /* Create the FIFO buffer based on the specified output sample format. */
+        chitm->fifo = av_audio_fifo_alloc(
+            chitm->ofile.audio.codec_ctx->sample_fmt
+            , chitm->ofile.audio.codec_ctx->ch_layout.nb_channels, 1);
+        if (chitm->fifo == nullptr) {
+            LOG_MSG(NTC, NO_ERRNO, "%s: Could not allocate FIFO"
+                , chitm->ch_nbr.c_str());
+            return;
+        }
     }
-
-    retcd = avcodec_parameters_to_context(enc_ctx, stream->codecpar);
-    if (retcd < 0) {
-        LOG_MSG(NTC, NO_ERRNO
-            , "%s: Could not copy parms to video encoder"
-            , chitm->ch_nbr.c_str());
-        return;
-    }
-*/
-
-/*
-    retcd = avcodec_parameters_from_context(stream->codecpar, enc_ctx);
-    if (retcd < 0) {
-        LOG_MSG(NTC, NO_ERRNO
-            , "%s: Failed to copy audio encoder parameters to stream"
-            , chitm->ch_nbr.c_str());
-        return;
-    }
-*/
-    //av_channel_layout_copy(&stream->codecpar->ch_layout, &dec_ctx->ch_layout);
 
     return;
 }
@@ -819,153 +885,36 @@ void encoder_init(ctx_channel_item *chitm)
 
 void streams_close(ctx_channel_item *chitm)
 {
-    if (chitm->ifile.audio.codec_ctx !=  NULL) {
+    if (chitm->ifile.audio.codec_ctx !=  nullptr) {
         avcodec_free_context(&chitm->ifile.audio.codec_ctx);
-        chitm->ifile.audio.codec_ctx =  NULL;
+        chitm->ifile.audio.codec_ctx =  nullptr;
     }
-    if (chitm->ifile.video.codec_ctx !=  NULL) {
+    if (chitm->ifile.video.codec_ctx !=  nullptr) {
         avcodec_free_context(&chitm->ifile.video.codec_ctx);
-        chitm->ifile.video.codec_ctx =  NULL;
+        chitm->ifile.video.codec_ctx =  nullptr;
     }
-    if (chitm->ifile.fmt_ctx != NULL) {
+    if (chitm->ifile.fmt_ctx != nullptr) {
         avformat_close_input(&chitm->ifile.fmt_ctx);
-        chitm->ifile.fmt_ctx = NULL;
+        chitm->ifile.fmt_ctx = nullptr;
     }
 
-    if (chitm->ofile.audio.codec_ctx !=  NULL) {
+    if (chitm->ofile.audio.codec_ctx !=  nullptr) {
         avcodec_free_context(&chitm->ofile.audio.codec_ctx);
-        chitm->ofile.audio.codec_ctx =  NULL;
+        chitm->ofile.audio.codec_ctx =  nullptr;
     }
-    if (chitm->ofile.video.codec_ctx !=  NULL) {
+    if (chitm->ofile.video.codec_ctx !=  nullptr) {
         avcodec_free_context(&chitm->ofile.video.codec_ctx);
-        chitm->ofile.video.codec_ctx =  NULL;
+        chitm->ofile.video.codec_ctx =  nullptr;
     }
-    if (chitm->ofile.fmt_ctx != NULL) {
+    if (chitm->ofile.fmt_ctx != nullptr) {
         avformat_free_context(chitm->ofile.fmt_ctx);
-        chitm->ofile.fmt_ctx = NULL;
-    }
-}
-
-
-
-
-
-/*
-    AVCodecID chk;
-
-    chk = chitm->ifmt_ctx->streams[chitm->pkt->stream_index]->codecpar->codec_id;
-    if (((chitm->pkt->stream_index == chitm->video.index_dec) &&
-         (chk != MY_CODEC_ID_H264)) ||
-        ((chitm->pkt->stream_index == chitm->audio.index_dec) &&
-         (chk != AV_CODEC_ID_AC3) && (chk != AV_CODEC_ID_AAC) &&
-         (chk != AV_CODEC_ID_AAC))) {
-        decoder_send(chitm);
-        decoder_receive(chitm);
-        encoder_send(chitm);
-        encoder_receive(chitm);
-    } else if ((chitm->pkt->stream_index == chitm->video.index_dec) ||
-        (chitm->pkt->stream_index == chitm->audio.index_dec)) {
-        packetarray_add(chitm, chitm->pkt
-            ,chitm->stream_ctx[chitm->pkt->stream_index].dec_ctx->time_base);
-    }
-*/
-
-/*
-    fprintf(stderr, "ts_base %ld %ld ts_file %ld %ld pts %ld %d dts %ld %d\n"
-        ,chitm->ts_base.audio,chitm->ts_base.video
-        ,chitm->ts_file.audio,chitm->ts_file.video
-        ,chitm->pkt->pts,chitm->pkt->stream_index
-        ,chitm->pkt->dts,chitm->pkt->stream_index
-
-        );
-
-*/
-
-    /*
-    retcd = av_write_frame(chitm->ofmt_ctx, chitm->pkt);
-    retcd = av_interleaved_write_frame(chitm->ofmt_ctx, chitm->pkt);
-
-    if (retcd < 0){
-        //fprintf(stderr, "%s: write packet: reset \n", chitm->guide_info->guide_displayname);
-    }
-    return;
-    */
-
-/*
-void writer_packet(ctx_channel_item *chitm)
-{
-    int64_t new_ts;
-
-    if ((chitm->pkt->stream_index != chitm->video.index_dec) &&
-        (chitm->pkt->stream_index != chitm->audio.index_dec)) {
-        return;
+        chitm->ofile.fmt_ctx = nullptr;
     }
 
-    if (chitm->pkt->pts != AV_NOPTS_VALUE) {
-        if (chitm->pkt->stream_index == chitm->video.index_dec) {
-            if (chitm->pkt->pts <= chitm->ts_file.video) {
-                new_ts = AV_NOPTS_VALUE;
-            } else {
-                new_ts = chitm->pkt->pts -
-                    chitm->ts_file.video +
-                    chitm->ts_base.video;
-                chitm->ts_out.video = new_ts;
-            }
-            chitm->pkt->pts = new_ts;
-        } else {
-            if (chitm->pkt->pts < chitm->ts_file.audio) {
-                new_ts = AV_NOPTS_VALUE;
-            } else {
-                new_ts = chitm->pkt->pts -
-                    chitm->ts_file.audio +
-                    chitm->ts_base.audio;
-                chitm->ts_out.audio = new_ts;
-            }
-            chitm->pkt->pts = new_ts;
-        }
-    }
-
-    if (chitm->pkt->dts != AV_NOPTS_VALUE) {
-        if (chitm->pkt->stream_index == chitm->video.index_dec) {
-            if (chitm->pkt->dts < chitm->ts_file.video) {
-                new_ts = AV_NOPTS_VALUE;
-            } else {
-                new_ts = chitm->pkt->dts -
-                    chitm->ts_file.video +
-                    chitm->ts_base.video;
-                if (chitm->ts_out.video < new_ts) {
-                    chitm->ts_out.video = new_ts;
-                }
-            }
-            chitm->pkt->dts = new_ts;
-        } else {
-            if (chitm->pkt->dts < chitm->ts_file.audio) {
-                new_ts = AV_NOPTS_VALUE;
-            } else {
-                new_ts = chitm->pkt->dts -
-                    chitm->ts_file.audio +
-                    chitm->ts_base.audio;
-                if (chitm->ts_out.audio < new_ts) {
-                    chitm->ts_out.audio = new_ts;
-                }
-            }
-            chitm->pkt->dts = new_ts;
-        }
-    } else {
-        chitm->pkt->dts = chitm->pkt->pts;
+    if (chitm->fifo != nullptr) {
+        av_audio_fifo_free(chitm->fifo);
     }
 
 }
-    chitm->stream_ctx = NULL;
-    chitm->stream_count = 0;
-    chitm->stream_count = chitm->ifmt_ctx->nb_streams;
-    chitm->stream_ctx =(ctx_codec*)malloc(
-            chitm->stream_count * sizeof(ctx_codec));
-    if (chitm->stream_ctx == nullptr) {
-        LOG_MSG(NTC, NO_ERRNO
-            , "%s:  Failed to allocate space for streams"
-            , chitm->ch_nbr.c_str());
-        return;
-    }
 
-*/
+

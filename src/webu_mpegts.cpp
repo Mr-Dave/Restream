@@ -372,8 +372,8 @@ static void webu_mpegts_getimg(ctx_webui *webui)
     pthread_mutex_unlock(&webui->chitm->mtx_pktarray);
 
     chk = 0;
-    while ((chk < 1000) && (pktready == false)) {
-        SLEEP(0, 250000000L);
+    while ((chk < 1000) && (pktready == false) && (finish == false)) {
+        SLEEP(0, 25000000L);
         pthread_mutex_lock(&webui->chitm->mtx_pktarray);
             if ((webui->chitm->pktarray[indx_next].iswritten == false) &&
                 (webui->chitm->pktarray[indx_next].packet != nullptr) &&
@@ -392,7 +392,6 @@ static void webu_mpegts_getimg(ctx_webui *webui)
     }
 
 }
-
 
 static int webu_mpegts_avio_buf(void *opaque, uint8_t *buf, int buf_size)
 {
@@ -457,7 +456,6 @@ static ssize_t webu_mpegts_response(void *cls, uint64_t pos, char *buf, size_t m
             ,webui->resp_used);
 */
     return sent_bytes;
-
 }
 
 static int webu_mpegts_streams_video(ctx_webui *webui)
@@ -575,15 +573,17 @@ static int webu_mpegts_streams_audio(ctx_webui *webui)
         return -1;
     }
 
-    enc_ctx =webui->chitm->ofile.audio.codec_ctx;
+    enc_ctx =webui->chitm->ifile.audio.codec_ctx;
     wfl_ctx =webui->wfile.audio.codec_ctx;
 
     webui->wfile.fmt_ctx->audio_codec_id = AV_CODEC_ID_AC3;
     webui->wfile.fmt_ctx->audio_codec = avcodec_find_encoder(AV_CODEC_ID_AC3);
+    stream->codecpar->codec_id=AV_CODEC_ID_AC3;
     stream->codecpar->bit_rate = enc_ctx->bit_rate;;
     stream->codecpar->frame_size = enc_ctx->frame_size;;
-    av_channel_layout_copy(&stream->codecpar->ch_layout, &enc_ctx->ch_layout);
-    stream->codecpar->codec_id=AV_CODEC_ID_AC3;
+    av_channel_layout_default(&stream->codecpar->ch_layout
+        , enc_ctx->ch_layout.nb_channels);
+
     stream->codecpar->format = enc_ctx->sample_fmt;
     stream->codecpar->sample_rate = enc_ctx->sample_rate;
     stream->time_base.den  = enc_ctx->sample_rate;
@@ -593,7 +593,8 @@ static int webu_mpegts_streams_audio(ctx_webui *webui)
     wfl_ctx->sample_fmt = enc_ctx->sample_fmt;
     wfl_ctx->sample_rate = enc_ctx->sample_rate;
     wfl_ctx->time_base = enc_ctx->time_base;
-    av_channel_layout_copy(&wfl_ctx->ch_layout, &enc_ctx->ch_layout);
+    av_channel_layout_default(&wfl_ctx->ch_layout
+        , enc_ctx->ch_layout.nb_channels);
     wfl_ctx->frame_size = enc_ctx->frame_size;
     wfl_ctx->pkt_timebase = enc_ctx->pkt_timebase;
 
@@ -656,8 +657,10 @@ void webu_mpegts_open(ctx_webui *webui)
         LOG_MSG(ERR, NO_ERRNO
             ,"Failed to write header!: %s", errstr);
         webu_mpegts_free_context(webui);
+        av_dict_free(&opts);
         return;
     }
+    av_dict_free(&opts);
 
     webui->stream_pos = 0;
     webui->resp_used = 0;
@@ -696,7 +699,6 @@ mhdrslt webu_mpegts_main(ctx_webui *webui)
     return retcd;
 }
 
-/* Increment the counters for the connections to the streams */
 static void webu_stream_cnct_cnt(ctx_webui *webui)
 {
     int indx;
@@ -718,12 +720,12 @@ static void webu_stream_cnct_cnt(ctx_webui *webui)
 
     webui->chitm->pktarray_lastwritten = indx;
 
-    if (webui->chitm->cnct_cnt == 1) {
+    //if (webui->chitm->cnct_cnt == 1) {
         /* This is the first connection so we need to wait a bit
          * so that the loop on the other thread can update image
          */
-        SLEEP(0,100000000L);
-    }
+    //    SLEEP(0,100000000L);
+    //}
 
 }
 
@@ -788,423 +790,3 @@ mhdrslt webu_stream_main(ctx_webui *webui)
 
 }
 
-
-
-
-
-/*
-static int webu_mpegts_pic_send(ctx_webui *webui, unsigned char *img)
-{
-    int retcd;
-    char errstr[128];
-    struct timespec curr_ts;
-    int64_t pts_interval;
-
-    if (webui->picture == NULL) {
-        webui->picture = myframe_alloc();
-        webui->picture->linesize[0] = webui->cdcctx->width;
-        webui->picture->linesize[1] = webui->cdcctx->width / 2;
-        webui->picture->linesize[2] = webui->cdcctx->width / 2;
-
-        webui->picture->format = webui->cdcctx->pix_fmt;
-        webui->picture->width  = webui->cdcctx->width;
-        webui->picture->height = webui->cdcctx->height;
-
-        webui->picture->pict_type = AV_PICTURE_TYPE_I;
-        webui->picture->key_frame = 1;
-        webui->picture->pts = 1;
-    }
-
-    webui->picture->data[0] = img;
-    webui->picture->data[1] = webui->picture->data[0] +
-        (webui->cdcctx->width * webui->cdcctx->height);
-    webui->picture->data[2] = webui->picture->data[1] +
-        ((webui->cdcctx->width * webui->cdcctx->height) / 4);
-
-    clock_gettime(CLOCK_REALTIME, &curr_ts);
-    pts_interval = ((1000000L * (curr_ts.tv_sec - webui->start_time.tv_sec)) +
-        (curr_ts.tv_nsec/1000) - (webui->start_time.tv_nsec/1000));
-    webui->picture->pts = av_rescale_q(pts_interval
-        ,(AVRational){1, 1000000L}, webui->cdcctx->time_base);
-
-    retcd = avcodec_send_frame(webui->cdcctx, webui->picture);
-    if (retcd < 0 ) {
-        av_strerror(retcd, errstr, sizeof(errstr));
-        LOG_MSG(ERR, NO_ERRNO
-            , "Error sending frame for encoding:%s", errstr);
-        myframe_free(webui->picture);
-        webui->picture = NULL;
-        return -1;
-    }
-
-    return 0;
-}
-
-
-
-    AVStream        *strm;
-    const AVCodec   *codec;
-    AVDictionary    *opts;
-    ctx_chitm *chitm;
-    AVCodecContext  *vidctx;
-    AVCodecContext  *audctx;
-    AVStream *vid_stream;
-    AVStream *aud_stream;
-
-    opts = NULL;
-    webui->cdcctx = NULL;
-    webui->ofmt_ctx = NULL;
-    webui->stream_fps = 10000;
-    clock_gettime(CLOCK_REALTIME, &webui->start_time);
-
-    webui->ofmt_ctx = avformat_alloc_context();
-    webui->ofmt_ctx->oformat = av_guess_format("mpegts", NULL, NULL);
-    chitm = webui->chitm;
-    vidctx = chitm->stream_ctx[chitm->video.index_dec].enc_ctx;
-    audctx =chitm->stream_ctx[chitm->audio->index].enc_ctx;
-
-    retcd = avcodec_parameters_from_context(vid_stream->codecpar, vidctx);
-    if (retcd < 0) {
-        LOG_MSG(NTC, NO_ERRNO
-            , "%s: Could not copy parms from video decoder"
-            , chitm->ch_nbr.c_str());
-        return;
-    }
-
-    retcd = avcodec_parameters_to_context(webui->ofmt_ctx, vid_stream->codecpar);
-    if (retcd < 0) {
-        LOG_MSG(NTC, NO_ERRNO
-            , "%s: Could not copy parms to video encoder"
-            , chitm->ch_nbr.c_str());
-        return;
-    }
-
-    enc_ctx->width = dec_ctx->width;
-    enc_ctx->height = dec_ctx->height;
-    enc_ctx->time_base = dec_ctx->time_base;
-    if (dec_ctx->pix_fmt == -1) {
-        enc_ctx->pix_fmt = AV_PIX_FMT_YUV420P;
-    } else {
-        enc_ctx->pix_fmt = dec_ctx->pix_fmt;
-    }
-
-    retcd = avcodec_open2(enc_ctx, encoder, NULL);
-    if (retcd < 0) {
-        LOG_MSG(NTC, NO_ERRNO
-            , "%s: Could not open video encoder"
-            , chitm->ch_nbr.c_str());
-        LOG_MSG(NTC, NO_ERRNO
-            , "%s: %dx%d %d %d"
-            , chitm->ch_nbr.c_str()
-            , enc_ctx->width, enc_ctx->height
-            , enc_ctx->pix_fmt, enc_ctx->time_base.den);
-        return;
-    }
-
-    if (chitm->ofmt_ctx->oformat->flags & AVFMT_GLOBALHEADER) {
-        enc_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-    }
-
-    out_stream->time_base = enc_ctx->time_base;
-
-    retcd = avcodec_parameters_from_context(out_stream->codecpar, enc_ctx);
-    if (retcd < 0) {
-        LOG_MSG(NTC, NO_ERRNO
-            , "%s: Could not copy parms from decoder"
-            , chitm->ch_nbr.c_str());
-        return;
-    }
-
-    webui->ofmt_ctx->video_codec_id = vidctx->codec_id;
-    codec = avcodec_find_encoder(webui->ofmt_ctx->video_codec_id);
-    strm = avformat_new_stream(webui->ofmt_ctx, codec);
-
-    webui->cdcctx = avcodec_alloc_context3(codec);
-    webui->cdcctx->gop_size      = vidctx->gop_size;
-    webui->cdcctx->codec_id      = MY_CODEC_ID_H264;
-    webui->cdcctx->codec_type    = AVMEDIA_TYPE_VIDEO;
-    webui->cdcctx->bit_rate      = 400000;
-
-    webui->cdcctx->width         = webui->cam->imgs.width;
-    webui->cdcctx->height        = webui->cam->imgs.height;
-
-    webui->cdcctx->time_base.num = 1;
-    webui->cdcctx->time_base.den = 90000;
-    webui->cdcctx->pix_fmt       = MY_PIX_FMT_YUV420P;
-    webui->cdcctx->max_b_frames  = 1;
-    webui->cdcctx->flags         |= MY_CODEC_FLAG_GLOBAL_HEADER;
-    webui->cdcctx->framerate.num  = 1;
-    webui->cdcctx->framerate.den  = 1;
-    av_opt_set(webui->cdcctx->priv_data, "profile", "main", 0);
-    av_opt_set(webui->cdcctx->priv_data, "crf", "22", 0);
-    av_opt_set(webui->cdcctx->priv_data, "tune", "zerolatency", 0);
-    av_opt_set(webui->cdcctx->priv_data, "preset", "superfast",0);
-    av_dict_set(&opts, "movflags", "empty_moov", 0);
-
-    retcd = avcodec_open2(webui->cdcctx, codec, &opts);
-    if (retcd < 0) {
-        av_strerror(retcd, errstr, sizeof(errstr));
-        LOG_MSG(ERR, NO_ERRNO
-            ,"Failed to copy decoder parameters!: %s", errstr);
-        webu_mpegts_free_context(webui);
-        av_dict_free(&opts);
-        return -1;
-    }
-
-    retcd = avcodec_parameters_from_context(strm->codecpar, webui->cdcctx);
-    if (retcd < 0) {
-        av_strerror(retcd, errstr, sizeof(errstr));
-        LOG_MSG(ERR, NO_ERRNO
-            ,"Failed to copy decoder parameters!: %s", errstr);
-        webu_mpegts_free_context(webui);
-        av_dict_free(&opts);
-        return -1;
-    }
-
-
-
-
-*/
-
-/*
-    retcd = avcodec_parameters_from_context(webui->strm_audio->codecpar, enc_ctx);
-    if (retcd < 0) {
-        av_strerror(retcd, errstr, sizeof(errstr));
-        LOG_MSG(ERR, NO_ERRNO
-            ,"Failed to copy encoder parameters!: %s", errstr);
-        return -1;
-    }
-
-    retcd = avcodec_parameters_to_context(ctx_codec, enc_ctx);
-    if (retcd < 0) {
-        av_strerror(retcd, errstr, sizeof(errstr));
-        LOG_MSG(ERR, NO_ERRNO
-            ,"Failed to copy encoder parameters!: %s", errstr);
-        return -1;
-    }
-    //wfl_ctx->strict_std_compliance = FF_COMPLIANCE_EXPERIMENTAL;
-    //wfl_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-    //av_dict_set(&opts, "strict", "experimental", 0);
-
-*/
-
-/*
-    wfl_ctx->sample_fmt = enc_ctx->sample_fmt;
-    wfl_ctx->sample_rate = enc_ctx->sample_rate;
-    wfl_ctx->time_base = enc_ctx->time_base;
-    wfl_ctx->bit_rate = enc_ctx->bit_rate;
-    av_channel_layout_copy(&wfl_ctx->ch_layout, &enc_ctx->ch_layout);
-    wfl_ctx->frame_size = enc_ctx->frame_size;
-    //wfl_ctx->strict_std_compliance = FF_COMPLIANCE_EXPERIMENTAL;
-    //wfl_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-    wfl_ctx->pkt_timebase = enc_ctx->pkt_timebase;
-    //av_dict_set(&opts, "strict", "experimental", 0);
-
-
-    stream->codecpar->bit_rate = 448000;
-    stream->codecpar->frame_size = 96000;
-    av_channel_layout_copy(&stream->codecpar->ch_layout, &enc_ctx->ch_layout);
-    stream->codecpar->codec_id=AV_CODEC_ID_AC3;
-    stream->codecpar->format = enc_ctx->sample_fmt;
-    stream->codecpar->sample_rate = enc_ctx->sample_rate;
-    stream->time_base.den  = enc_ctx->sample_rate;
-    stream->time_base.num = 1;
-*/
-
-/*
-    retcd = avcodec_parameters_from_context(webui->wfile.audio.strm->codecpar, wfl_ctx);
-    if (retcd < 0) {
-        av_strerror(retcd, errstr, sizeof(errstr));
-        LOG_MSG(ERR, NO_ERRNO
-            ,"Failed to copy encoder parameters!: %s", errstr);
-        return -1;
-    }
-*/
-
-/*
-Sleep required time to get to the user requested framerate for the stream
-void webu_stream_delay(ctx_webui *webui)
-{
-    long   stream_rate;
-    struct timespec time_curr;
-    long   stream_delay;
-
-    if ((webui->app->webcontrol_finish) ||
-        (webui->chitm->ch_finish)) {
-        webui->resp_used = 0;
-        return;
-    }
-
-return;
-
-    clock_gettime(CLOCK_MONOTONIC, &time_curr);
-
-    // The stream rate MUST be less than 1000000000 otherwise undefined behaviour
-    // will occur with the SLEEP function.
-    //
-    stream_delay = ((time_curr.tv_nsec - webui->time_last.tv_nsec)) +
-        ((time_curr.tv_sec - webui->time_last.tv_sec)*1000000000);
-    if (stream_delay < 0)  {
-        stream_delay = 0;
-    }
-    if (stream_delay > 1000000000 ) {
-        stream_delay = 1000000000;
-    }
-
-    if (webui->stream_fps <= -1) {
-        stream_rate = ( (1000000000 / webui->stream_fps) - stream_delay);
-        if ((stream_rate > 0) && (stream_rate < 1000000000)) {
-            SLEEP(0,stream_rate);
-        } else if (stream_rate == 1000000000) {
-            SLEEP(1,0);
-        }
-    }
-    clock_gettime(CLOCK_MONOTONIC, &webui->time_last);
-
-}
-*/
-
-/*
-static void webu_mpegts_getimg_old(ctx_webui *webui)
-{
-    int64_t idnbr_image, idnbr_lastwritten, idnbr_stop, idnbr_firstkey;
-    int indx, indx_lastwritten, indx_firstkey, indx_video;
-
-    if ((webui->app->webcontrol_finish) || (webui->chitm->ch_finish)) {
-        webu_mpegts_resetpos(webui);
-        return;
-    }
-
-    pthread_mutex_lock(&webui->chitm->mtx_pktarray);
-        if (webui->chitm->pktarray_count == 0) {
-            pthread_mutex_unlock(&webui->chitm->mtx_pktarray);
-            return;
-        }
-
-        indx = webui->chitm->pktarray_index;
-        idnbr_image = webui->chitm->pktarray[indx].idnbr;
-        idnbr_lastwritten = 0;
-        idnbr_firstkey = idnbr_image;
-        idnbr_stop = 0;
-        indx_lastwritten = -1;
-        indx_firstkey = -1;
-        indx_video = webui->chitm->ofile.video.index;
-
-        for(indx = 0; indx < webui->chitm->pktarray_count; indx++) {
-            if ((webui->chitm->pktarray[indx].iswritten) &&
-                (webui->chitm->pktarray[indx].idnbr > idnbr_lastwritten) &&
-                (webui->chitm->pktarray[indx].packet->stream_index == indx_video)) {
-                idnbr_lastwritten=webui->chitm->pktarray[indx].idnbr;
-                indx_lastwritten = indx;
-            }
-            if ((webui->chitm->pktarray[indx].idnbr >  idnbr_stop) &&
-                (webui->chitm->pktarray[indx].idnbr <= idnbr_image)&&
-                (webui->chitm->pktarray[indx].packet->stream_index == indx_video)) {
-                idnbr_stop=webui->chitm->pktarray[indx].idnbr;
-            }
-            if ((webui->chitm->pktarray[indx].iskey) &&
-                (webui->chitm->pktarray[indx].idnbr <= idnbr_firstkey)&&
-                (webui->chitm->pktarray[indx].packet->stream_index == indx_video)) {
-                    idnbr_firstkey=webui->chitm->pktarray[indx].idnbr;
-                    indx_firstkey = indx;
-            }
-        }
-
-        if (idnbr_stop == 0) {
-            pthread_mutex_unlock(&webui->chitm->mtx_pktarray);
-            return;
-        }
-
-        if (indx_lastwritten != -1) {
-            indx = indx_lastwritten;
-        } else if (indx_firstkey != -1) {
-            indx = indx_firstkey;
-        } else {
-            indx = 0;
-        }
-
-        while (true){
-            if ((webui->chitm->pktarray[indx].iswritten == false) &&
-                (webui->chitm->pktarray[indx].packet->size > 0) &&
-                (webui->chitm->pktarray[indx].idnbr >  idnbr_lastwritten) &&
-                (webui->chitm->pktarray[indx].idnbr <= idnbr_image)) {
-                webu_mpegts_packet_write(webui, indx);
-            }
-            if (webui->chitm->pktarray[indx].idnbr == idnbr_stop) {
-                break;
-            }
-            indx++;
-            if (indx == webui->chitm->pktarray_count ) {
-                indx = 0;
-            }
-        }
-    pthread_mutex_unlock(&webui->chitm->mtx_pktarray);
-
-}
-*/
-/*
-static void webu_mpegts_packet_minpts(ctx_webui *webui)
-{
-    int indx, indx_audio, indx_video;
-    int64_t vbase, abase;
-
-    // Note that the packets in the array are using the chitm->ofile
-    //  index values of streams which could be different than webui->wfile
-    //
-    pthread_mutex_lock(&webui->chitm->mtx_pktarray);
-        indx_audio = webui->chitm->ofile.audio.index;
-        indx_video = webui->chitm->ofile.video.index;
-
-        for (indx = 0; indx < webui->chitm->pktarray_count; indx++) {
-            if (webui->chitm->pktarray[indx].packet == nullptr) {
-                break;
-            }
-            if ((webui->chitm->pktarray[indx].packet->stream_index == indx_audio) &&
-                (webui->chitm->pktarray[indx].packet->pts != AV_NOPTS_VALUE)) {
-                abase = webui->chitm->pktarray[indx].packet->pts;
-            };
-            if ((webui->chitm->pktarray[indx].packet->stream_index == indx_video) &&
-                (webui->chitm->pktarray[indx].packet->pts != AV_NOPTS_VALUE)) {
-                vbase = webui->chitm->pktarray[indx].packet->pts;
-            };
-        }
-        for (indx = 0; indx < webui->chitm->pktarray_count; indx++) {
-            if (webui->chitm->pktarray[indx].packet == nullptr) {
-                break;
-            }
-            if ((webui->chitm->pktarray[indx].packet->stream_index == indx_audio) &&
-                (webui->chitm->pktarray[indx].packet->pts != AV_NOPTS_VALUE) &&
-                (webui->chitm->pktarray[indx].packet->pts < abase)) {
-                abase = webui->chitm->pktarray[indx].packet->pts;
-            };
-            if ((webui->chitm->pktarray[indx].packet->stream_index == indx_audio) &&
-                (webui->chitm->pktarray[indx].packet->pts != AV_NOPTS_VALUE) &&
-                (webui->chitm->pktarray[indx].packet->dts < abase)) {
-                abase = webui->chitm->pktarray[indx].packet->dts;
-            };
-            if ((webui->chitm->pktarray[indx].packet->stream_index == indx_video) &&
-                (webui->chitm->pktarray[indx].packet->pts != AV_NOPTS_VALUE) &&
-                (webui->chitm->pktarray[indx].packet->pts < vbase)) {
-                vbase = webui->chitm->pktarray[indx].packet->pts;
-            };
-            if ((webui->chitm->pktarray[indx].packet->stream_index == indx_video) &&
-                (webui->chitm->pktarray[indx].packet->pts != AV_NOPTS_VALUE) &&
-                (webui->chitm->pktarray[indx].packet->dts < vbase)) {
-                vbase = webui->chitm->pktarray[indx].packet->dts;
-            };
-        }
-    pthread_mutex_unlock(&webui->chitm->mtx_pktarray);
-
-    if (abase < 0) {
-        abase = 0;
-    }
-
-    if (vbase < 0) {
-        vbase = 0;
-    }
-
-    webui->wfile.audio.base_pdts = abase;
-    webui->wfile.video.base_pdts = vbase;
-}
-
-*/

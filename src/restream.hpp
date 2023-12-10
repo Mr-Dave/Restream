@@ -31,6 +31,7 @@
         #include <libavutil/timestamp.h>
         #include <libavutil/time.h>
         #include <libavutil/mem.h>
+        #include "libavutil/audio_fifo.h"
         #include <libswscale/swscale.h>
     }
     #include <microhttpd.h>
@@ -97,16 +98,6 @@
         WEBUI_LEVEL_NEVER      = 99
     };
 
-    struct ctx_codec {
-        AVCodecContext      *dec_ctx;
-        AVCodecContext      *enc_ctx;
-    };
-
-    struct ts_item {
-        int64_t audio;
-        int64_t video;
-    };
-
     struct ctx_params_item {
         std::string     param_name;       /* The name or description of the ID as requested by user*/
         std::string     param_value;      /* The value that the user wants the control set to*/
@@ -126,35 +117,6 @@
         struct timespec             conn_time;
         int                         userid_fail_nbr;
     };
-
-    struct ctx_restream {
-        std::string             in_filename;
-        std::string             out_filename;
-        AVFormatContext         *ofmt_ctx;
-        const AVOutputFormat    *ofmt;
-
-        unsigned int            rand_seed;
-        std::string             playlist_dir;
-        std::string             function_name;
-        volatile bool           finish_thread;
-        int                     playlist_count;
-        int                     playlist_index;
-        std::string             playlist_sort_method;   //a =alpha, r = random
-
-        volatile enum PIPE_STATUS       pipe_state;
-        volatile enum READER_STATUS     reader_status;
-        volatile enum READER_ACTION     reader_action;
-
-        int64_t                watchdog_reader;
-        int64_t                watchdog_playlist;
-        int64_t                connect_start;
-        int                    soft_restart;
-        pthread_t              reader_thread;
-        pthread_t              process_playlist_thread;
-        pthread_mutex_t        mutex_reader;   /* mutex used with the output reader */
-
-    };
-
 
     struct ctx_playlist_item {
         std::string   fullnm;
@@ -215,6 +177,7 @@
         int64_t         file_cnt;
         AVPacket        *pkt;
         AVFrame         *frame;
+        AVAudioFifo     *fifo;
 
         int cnct_cnt;
 

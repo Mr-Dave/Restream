@@ -139,6 +139,7 @@ void channel_process_setup(ctx_channel_item *chitm)
     chitm->pkt = nullptr;
     chitm->cnct_cnt = 0;
     chitm->file_cnt = 0;
+    chitm->fifo = nullptr;
 
     pthread_mutex_init(&chitm->mtx_ifmt, NULL);
     pthread_mutex_init(&chitm->mtx_pktarray, NULL);
@@ -211,6 +212,17 @@ void channel_process(ctx_app *app, int chindx)
             streams_close(chitm);
         }
     }
+
+    for (indx=0; indx < (int)chitm->pktarray.size(); indx++) {
+        if (chitm->pktarray[indx].packet != nullptr) {
+            mypacket_free(chitm->pktarray[indx].packet);
+            chitm->pktarray[indx].packet = nullptr;
+        }
+    }
+
+    chitm->pktarray.clear();
+    chitm->pktarray_count = 0;
+
     pthread_mutex_destroy(&chitm->mtx_ifmt);
     pthread_mutex_destroy(&chitm->mtx_pktarray);
 
@@ -308,6 +320,8 @@ int main(int argc, char **argv){
     webu_init(app);
 
     channels_wait(app);
+
+    webu_deinit(app);
 
     delete app->conf;
     delete app;
