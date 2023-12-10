@@ -129,7 +129,7 @@ void channel_process_setup(ctx_channel_item *chitm)
     chitm->ch_dir = "";
     chitm->ch_nbr = "";
     chitm->ch_sort = "";
-    chitm->ch_status = false;
+    chitm->ch_running = false;
     chitm->ch_tvhguide = true;
     chitm->frame = nullptr;
     chitm->pktnbr = 0;
@@ -186,9 +186,10 @@ void channel_process(ctx_app *app, int chindx)
     ctx_channel_item *chitm = &app->channels[chindx];
     int indx;
 
+    chitm->ch_running = true;
+
     channel_process_setup(chitm);
 
-    chitm->ch_status = true;
     pthread_mutex_lock(&chitm->mtx_ifmt);
 
     while (chitm->ch_finish == false) {
@@ -210,6 +211,9 @@ void channel_process(ctx_app *app, int chindx)
             infile_read(chitm);
             pthread_mutex_lock(&chitm->mtx_ifmt);
             streams_close(chitm);
+            if (chitm->ch_finish == true) {
+                break;
+            }
         }
     }
 
@@ -226,7 +230,7 @@ void channel_process(ctx_app *app, int chindx)
     pthread_mutex_destroy(&chitm->mtx_ifmt);
     pthread_mutex_destroy(&chitm->mtx_pktarray);
 
-    chitm->ch_finish = true;
+    chitm->ch_running = false;
 }
 
 void channels_init(ctx_app *app)
@@ -258,31 +262,31 @@ void channels_init(ctx_app *app)
 
 void channels_wait(ctx_app *app)
 {
-    int chcnt, indx;
+    int chcnt, indx, chk;
 
     chcnt = 1;
+    chk = 0;
     while (chcnt != 0){
-/*
-        int indx2;
-        for (indx=0; indx < app->ch_count; indx++) {
-            if (app->channels[indx].ch_status == true ) {
-                for (indx2=0; indx2 < app->channels[indx].playlist_count; indx2++) {
-                    LOG_MSG(NTC, NO_ERRNO, "%s"
-                        ,app->channels[indx].playlist[indx2].filenm.c_str());
-                }
-            }
-        }
-*/
         sleep(1);
-
         if (finish) {
+            chk++;
             for (indx=0; indx < app->ch_count; indx++) {
                 app->channels[indx].ch_finish = true;
             }
             sleep(1);
             chcnt = 0;
+            for (indx=0; indx < app->ch_count; indx++) {
+                if (app->channels[indx].ch_running == true) {
+                    chcnt++;
+                }
+            }
+            if (chk >5) {
+                LOG_MSG(NTC, NO_ERRNO,"Excessive wait for shutdown");
+                chcnt =0;
+            }
         }
     }
+
 }
 
 void logger(void *var1, int errnbr, const char *fmt, va_list vlist)

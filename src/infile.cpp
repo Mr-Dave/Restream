@@ -764,12 +764,7 @@ static void encoder_init_audio(ctx_channel_item *chitm)
 
     chitm->ofile.audio.codec_ctx = nullptr;
 
-    //if (chitm->ifile.audio.codec_ctx->codec_id == AV_CODEC_ID_AC3 ) {
-        encoder = avcodec_find_encoder(AV_CODEC_ID_AC3);
-    //} else {
-    //    encoder = avcodec_find_encoder(AV_CODEC_ID_AAC);
-        //encoder = avcodec_find_encoder_by_name("libfdk_aac");
-    //}
+    encoder = avcodec_find_encoder(AV_CODEC_ID_AC3);
 
     stream = avformat_new_stream(chitm->ofile.fmt_ctx, encoder);
     chitm->ofile.audio.strm = stream;
@@ -792,16 +787,9 @@ static void encoder_init_audio(ctx_channel_item *chitm)
     enc_ctx = chitm->ofile.audio.codec_ctx;
     dec_ctx = chitm->ifile.audio.codec_ctx;
 
-    //if (dec_ctx->codec_id == AV_CODEC_ID_AC3 ) {
-        chitm->ofile.fmt_ctx->audio_codec_id = AV_CODEC_ID_AC3;
-        chitm->ofile.fmt_ctx->audio_codec = avcodec_find_encoder(AV_CODEC_ID_AC3);
-        stream->codecpar->codec_id=AV_CODEC_ID_AC3;
-    //} else if (dec_ctx->codec_id == AV_CODEC_ID_AAC ) {
-    //    chitm->ofile.fmt_ctx->audio_codec_id = AV_CODEC_ID_AAC;
-    //    stream->codecpar->codec_id=AV_CODEC_ID_AAC;
-    //    chitm->ofile.fmt_ctx->audio_codec = avcodec_find_encoder(AV_CODEC_ID_AAC);
-        //chitm->ofile.fmt_ctx->audio_codec = avcodec_find_encoder_by_name("libfdk_aac");
-    //}
+    chitm->ofile.fmt_ctx->audio_codec_id = AV_CODEC_ID_AC3;
+    chitm->ofile.fmt_ctx->audio_codec = avcodec_find_encoder(AV_CODEC_ID_AC3);
+    stream->codecpar->codec_id=AV_CODEC_ID_AC3;
 
     stream->codecpar->bit_rate = dec_ctx->bit_rate;
     stream->codecpar->frame_size = dec_ctx->frame_size;
@@ -824,16 +812,6 @@ static void encoder_init_audio(ctx_channel_item *chitm)
     enc_ctx->time_base.den  = dec_ctx->sample_rate;
     av_channel_layout_default(&enc_ctx->ch_layout
         , dec_ctx->ch_layout.nb_channels);
-
-    if (enc_ctx->codec_id == AV_CODEC_ID_AAC ) {
-        enc_ctx->strict_std_compliance = FF_COMPLIANCE_EXPERIMENTAL;
-        enc_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-        av_dict_set(&opts, "strict", "experimental", 0);
-        chitm->ofile.fmt_ctx->strict_std_compliance=FF_COMPLIANCE_EXPERIMENTAL;
-        //enc_ctx->profile =   FF_PROFILE_AAC_MAIN;
-        //enc_ctx->profile =FF_PROFILE_MPEG2_AAC_LOW;
-        enc_ctx->profile =FF_PROFILE_MPEG2_AAC_HE;
-    }
 
     retcd = avcodec_open2(enc_ctx, encoder, &opts);
     if (retcd < 0) {
@@ -885,6 +863,9 @@ void encoder_init(ctx_channel_item *chitm)
 
 void streams_close(ctx_channel_item *chitm)
 {
+    LOG_MSG(NTC, NO_ERRNO, "%s: Closing "
+        , chitm->ch_nbr.c_str());
+
     if (chitm->ifile.audio.codec_ctx !=  nullptr) {
         avcodec_free_context(&chitm->ifile.audio.codec_ctx);
         chitm->ifile.audio.codec_ctx =  nullptr;

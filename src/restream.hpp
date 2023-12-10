@@ -69,27 +69,6 @@
                 while (nanosleep(&ts1, &ts1) == -1); \
         }
 
-    enum PIPE_STATUS{
-        PIPE_IS_OPEN,
-        PIPE_IS_CLOSED,
-        PIPE_NEEDS_RESET
-    };
-    enum READER_STATUS{
-        READER_STATUS_CLOSED,
-        READER_STATUS_PAUSED,
-        READER_STATUS_OPEN,
-        READER_STATUS_INACTIVE,
-        READER_STATUS_READING,
-        READER_STATUS_READBYTE
-    };
-    enum READER_ACTION{
-        READER_ACTION_START,
-        READER_ACTION_OPEN,
-        READER_ACTION_CLOSE,
-        READER_ACTION_END,
-        READER_ACTION_BYTE
-    };
-
     enum WEBUI_LEVEL{
         WEBUI_LEVEL_ALWAYS     = 0,
         WEBUI_LEVEL_LIMITED    = 1,
@@ -134,11 +113,6 @@
         int64_t     file_cnt;
     };
 
-    struct ctx_stream_info {
-        int index_dec;
-        int index_enc;
-    };
-
     struct ctx_av_info {
         int             index;
         AVCodecContext  *codec_ctx;
@@ -164,7 +138,7 @@
         std::string     ch_sort;
 
         int     ch_index;
-        bool    ch_status;
+        bool    ch_running;
         bool    ch_finish;
         bool    ch_tvhguide;
 
