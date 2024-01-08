@@ -100,8 +100,8 @@ AS_IF([test "${FFMPEG}" = "no"], [
     AC_MSG_CHECKING(for FFmpeg)
     AS_IF([pkgconf $FFMPEG_DEPS], [
         FFMPEG_VER=`pkgconf --modversion libavformat`
-        TEMP_CPPFLAGS="$TEMP_CPPFLAGS "`pkgconf --cflags $FFMPEG_DEPS`
-        TEMP_LIBS="$TEMP_LIBS "`pkgconf --libs $FFMPEG_DEPS`
+        TEMP_CPPFLAGS=`pkgconf --cflags $FFMPEG_DEPS`" $TEMP_CPPFLAGS "
+        TEMP_LIBS=`pkgconf --libs $FFMPEG_DEPS`" $TEMP_LIBS "
         AC_DEFINE([HAVE_FFMPEG], [1], [Define to 1 if FFMPEG is around])
         AC_MSG_RESULT(yes)
       ],[

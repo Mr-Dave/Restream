@@ -131,12 +131,12 @@ void channel_process_setup(ctx_channel_item *chitm)
     chitm->ch_sort = "";
     chitm->ch_running = false;
     chitm->ch_tvhguide = true;
+    chitm->ch_encode = "";
     chitm->frame = nullptr;
     chitm->pktnbr = 0;
     chitm->pktarray_count = 0;
     chitm->pktarray_index = -1;
-    chitm->pktarray_lastwritten = -1;
-    chitm->pkt = nullptr;
+    chitm->pkt_in = nullptr;
     chitm->cnct_cnt = 0;
     chitm->file_cnt = 0;
     chitm->fifo = nullptr;
@@ -162,6 +162,9 @@ void channel_process_setup(ctx_channel_item *chitm)
         }
         if (it->param_name == "tvhguide") {
             conf_edit_set_bool(chitm->ch_tvhguide, it->param_value);
+        }
+        if (it->param_name == "enc") {
+            chitm->ch_encode = it->param_value;
         }
     }
 
@@ -293,10 +296,24 @@ void logger(void *var1, int errnbr, const char *fmt, va_list vlist)
 {
     char buff[1024];
     (void)var1;
-    vsnprintf(buff,sizeof(buff),fmt, vlist);
+
+    vsnprintf(buff, sizeof(buff), fmt, vlist);
+
+    buff[strlen(buff)-1] = 0;
+
+    if (errnbr < AV_LOG_VERBOSE) {
+        LOG_MSG(INF, NO_ERRNO,"ffmpeg message: %s",buff );
+    }
+
+    return;
+
     if (errnbr < AV_LOG_FATAL) {
         LOG_MSG(INF, NO_ERRNO,"ffmpeg message: %s", buff);
     }
+    if (errnbr < AV_LOG_TRACE) {
+        LOG_MSG(INF, NO_ERRNO,"ffmpeg message: %s", buff);
+    }
+
 }
 
 int main(int argc, char **argv){

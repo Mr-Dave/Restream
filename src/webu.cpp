@@ -93,6 +93,15 @@ static void webu_context_init(ctx_app *app, ctx_webui *webui)
     webui->wfile.fmt_ctx = nullptr;
     webui->wfile.time_start = -1;
     webui->file_cnt = 0;
+    webui->start_cnt = 50;
+    webui->msec_cnt = 10;
+    webui->pkt = nullptr;
+    webui->pkt_index = 0;
+    webui->pkt_idnbr =1;
+    webui->pkt_start_pts=0;
+    webui->pkt_timebase.num = 1;
+    webui->pkt_timebase.den = 1000;
+    webui->pkt_file_cnt = 0;
 
     return;
 }

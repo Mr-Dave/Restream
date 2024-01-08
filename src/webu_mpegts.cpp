@@ -60,25 +60,42 @@ static void webu_mpegts_resetpos(ctx_webui *webui)
     webui->resp_used = 0;
 }
 
-static void webu_mpegts_packet_wait(ctx_webui *webui, AVPacket *pkt)
+static void webu_mpegts_packet_wait(ctx_webui *webui)
 {
     int64_t tm_diff, pts_diff, tot_diff;
+    int64_t sec_full, sec_msec;
 
     if (finish == true) {
         return;
     }
 
-    if (pkt->pts == AV_NOPTS_VALUE) {
+    if (webui->pkt->pts == AV_NOPTS_VALUE) {
+        return;
+    }
+
+
+    return;
+
+    SLEEP(0, webui->msec_cnt * 1000);
+    return;
+
+    /* Do not wait when we are just starting up the connection.*/
+    if (webui->start_cnt < 0) {
+        webui->start_cnt--;
         return;
     }
 
     /* How much time the pts wants us to be at since the start of the movie */
-    if (pkt->stream_index == webui->wfile.audio.index) {
-        pts_diff = av_rescale(pkt->pts - webui->wfile.audio.start_pts
-            , 1000000, webui->wfile.audio.strm->time_base.den);
+    if (webui->pkt->stream_index == webui->wfile.audio.index) {
+        pts_diff = av_rescale_q(
+            webui->pkt->pts - webui->wfile.audio.start_pts
+            , AVRational{1,1}
+            ,webui->wfile.audio.strm->time_base);
     } else {
-        pts_diff = av_rescale(pkt->pts - webui->wfile.video.start_pts
-            , 1000000, webui->wfile.video.strm->time_base.den);
+        pts_diff = av_rescale_q(
+            webui->pkt->pts - webui->wfile.video.start_pts
+            , AVRational{1,1}
+            ,webui->wfile.video.strm->time_base);
     }
 
     /* How much time has really elapsed since the start of movie*/
@@ -88,72 +105,41 @@ static void webu_mpegts_packet_wait(ctx_webui *webui, AVPacket *pkt)
     tot_diff = pts_diff - tm_diff;
 
     if (tot_diff > 0) {
-        if (tot_diff < 1000000){
-            SLEEP(0, tot_diff * 1000);
+        sec_full = int(tot_diff / 1000000L);
+        sec_msec = (tot_diff % 1000000L);
+        if (sec_full < 100){
+            SLEEP(sec_full, sec_msec * 1000);
         } else {
-            if (pkt->stream_index ==webui->wfile.audio.index) {
-                LOG_MSG(INF, NO_ERRNO, "sync index %d last %d pktpts %d base %d src %d"
-                    , pkt->stream_index
+            if (webui->pkt->stream_index ==webui->wfile.audio.index) {
+                LOG_MSG(INF, NO_ERRNO, "sync index %d last %d pktpts %d base %d "
+                    , webui->pkt->stream_index
                     , webui->wfile.audio.last_pts
-                    , pkt->pts
+                    , webui->pkt->pts
                     , webui->wfile.audio.base_pdts
-                    ,webui->chitm->pktarray[webui->chitm->pktarray_lastwritten].packet->pts
                 );
             } else {
-                LOG_MSG(INF, NO_ERRNO, "sync index %d last %d pktpts %d base %d src %d"
-                    , pkt->stream_index
+                LOG_MSG(INF, NO_ERRNO, "sync index %d last %d pktpts %d base %d"
+                    , webui->pkt->stream_index
                     , webui->wfile.video.last_pts
-                    , pkt->pts
+                    , webui->pkt->pts
                     , webui->wfile.video.base_pdts
-                    ,webui->chitm->pktarray[webui->chitm->pktarray_lastwritten].packet->pts
                 );
             }
-            webui->wfile.time_start = av_gettime_relative();
-            if (pkt->stream_index == webui->wfile.audio.index) {
-                webui->wfile.audio.start_pts = pkt->pts;
-                webui->wfile.video.start_pts = av_rescale_q(pkt->pts
-                    , webui->wfile.audio.strm->time_base
-                    , webui->wfile.video.strm->time_base);
-            } else {
-                webui->wfile.video.start_pts = pkt->pts;
-                webui->wfile.audio.start_pts = av_rescale_q(pkt->pts
-                    , webui->wfile.video.strm->time_base
-                    , webui->wfile.audio.strm->time_base);
-            }
-            webui->wfile.audio.last_pts = webui->wfile.audio.start_pts;
-            webui->wfile.video.last_pts = webui->wfile.video.start_pts;
         }
     }
 }
 
-static void webu_mpegts_packet_pts(ctx_webui *webui, AVPacket *pkt, int indx)
+static void webu_mpegts_packet_pts(ctx_webui *webui)
 {
-    int64_t ts_interval, base_pdts, last_pts, src_pts;
-    int64_t strm_st_pts, file_st_pts;
-    AVRational tmpdst, tbase;
+    int64_t ts_interval, base_pdts, last_pts;
+    int64_t strm_st_pts, src_pts, temp_pts;
+    AVRational tmpdst;
 
-    src_pts = pkt->pts;
+    src_pts = webui->pkt->pts;
     if (webui->wfile.time_start == -1) {
         webui->wfile.time_start = av_gettime_relative();
-        webui->wfile.audio.start_pts = av_rescale_q(
-            src_pts - webui->chitm->pktarray[indx].start_pts
-            , webui->chitm->pktarray[indx].timebase
-            , webui->wfile.audio.strm->time_base);
-        webui->wfile.video.start_pts = av_rescale_q(
-            src_pts - webui->chitm->pktarray[indx].start_pts
-            , webui->chitm->pktarray[indx].timebase
-            , webui->wfile.video.strm->time_base);
-        if (webui->wfile.audio.start_pts <= 0) {
-            webui->wfile.audio.start_pts = 1;
-        }
-        if (webui->wfile.video.start_pts <= 0) {
-            webui->wfile.video.start_pts = 1;
-        }
-        webui->wfile.audio.last_pts = 0;
-        webui->wfile.video.last_pts = 0;
-        webui->wfile.audio.base_pdts = 0;
-        webui->wfile.video.base_pdts = 0;
-        webui->file_cnt = webui->chitm->pktarray[indx].file_cnt;
+        webui->file_cnt = webui->pkt_file_cnt;
+    }
 /*
         LOG_MSG(DBG, NO_ERRNO
             ,"init %d %d pts %d %d %d/%d st-a %d %d/%d st-v %d %d/%d"
@@ -171,36 +157,84 @@ static void webu_mpegts_packet_pts(ctx_webui *webui, AVPacket *pkt, int indx)
             , webui->wfile.video.strm->time_base.den
             );
 */
-    }
 
-    if (pkt->stream_index == webui->wfile.audio.index) {
-        tmpdst = webui->wfile.audio.codec_ctx->time_base;
+
+    if (webui->pkt->stream_index == webui->wfile.audio.index) {
+        if (webui->wfile.audio.start_pts == -1 ) {
+            webui->wfile.audio.start_pts = av_rescale_q(
+                src_pts - webui->pkt_start_pts
+                , webui->pkt_timebase
+                , webui->wfile.audio.strm->time_base);
+            if (webui->wfile.audio.start_pts <= 0) {
+                webui->wfile.audio.start_pts = 1;
+            }
+            if (webui->wfile.video.start_pts != -1 ) {
+                temp_pts = av_rescale_q(
+                    webui->wfile.video.start_pts
+                    , webui->wfile.video.strm->time_base
+                    , webui->wfile.audio.strm->time_base);
+                if (temp_pts < webui->wfile.audio.start_pts) {
+                    webui->wfile.audio.start_pts = temp_pts;
+                } else {
+                    webui->wfile.video.start_pts = av_rescale_q(
+                        webui->wfile.audio.start_pts
+                        , webui->wfile.audio.strm->time_base
+                        , webui->wfile.video.strm->time_base);
+                }
+            }
+            webui->wfile.audio.last_pts = 0;
+            webui->wfile.audio.base_pdts = 0;
+        }
         tmpdst = webui->wfile.audio.strm->time_base;
         last_pts = webui->wfile.audio.last_pts;
         base_pdts = webui->wfile.audio.base_pdts;
         strm_st_pts = webui->wfile.audio.start_pts;
     } else {
+        if (webui->wfile.video.start_pts == -1 ) {
+            webui->wfile.video.start_pts = av_rescale_q(
+                src_pts - webui->pkt_start_pts
+                , webui->pkt_timebase
+                , webui->wfile.video.strm->time_base);
+            if (webui->wfile.video.start_pts <= 0) {
+                webui->wfile.video.start_pts = 1;
+            }
+            if (webui->wfile.audio.start_pts != -1 ) {
+                temp_pts = av_rescale_q(
+                    webui->wfile.audio.start_pts
+                    , webui->wfile.audio.strm->time_base
+                    , webui->wfile.video.strm->time_base);
+                if (temp_pts < webui->wfile.video.start_pts) {
+                    webui->wfile.video.start_pts = temp_pts;
+                } else {
+                    webui->wfile.audio.start_pts = av_rescale_q(
+                        webui->wfile.video.start_pts
+                        , webui->wfile.video.strm->time_base
+                        , webui->wfile.audio.strm->time_base);
+                }
+            }
+            webui->wfile.video.last_pts = 0;
+            webui->wfile.video.base_pdts = 0;
+        }
         tmpdst = webui->wfile.video.strm->time_base;
         last_pts = webui->wfile.video.last_pts;
         base_pdts = webui->wfile.video.base_pdts;
         strm_st_pts = webui->wfile.video.start_pts;
     }
-    file_st_pts = webui->chitm->pktarray[indx].start_pts;
-    tbase = webui->chitm->pktarray[indx].timebase;
 
-    if (pkt->pts != AV_NOPTS_VALUE) {
-        if (webui->file_cnt == webui->chitm->pktarray[indx].file_cnt) {
-            pkt->pts = av_rescale_q(pkt->pts - file_st_pts , tbase, tmpdst) -
-                strm_st_pts + base_pdts;
+
+    if (webui->pkt->pts != AV_NOPTS_VALUE) {
+        if (webui->file_cnt == webui->pkt_file_cnt) {
+            webui->pkt->pts = av_rescale_q(webui->pkt->pts - webui->pkt_start_pts
+                ,webui->pkt_timebase, tmpdst) - strm_st_pts + base_pdts;
         } else {
-            webui->file_cnt = webui->chitm->pktarray[indx].file_cnt;
+            webui->file_cnt = webui->pkt_file_cnt;
             base_pdts = last_pts + strm_st_pts;
-            pkt->pts = av_rescale_q(pkt->pts - file_st_pts , tbase, tmpdst) -
-                strm_st_pts + base_pdts;
-            if (pkt->pts == last_pts) {
-                pkt->pts++;
+            webui->pkt->pts = av_rescale_q(webui->pkt->pts - webui->pkt_start_pts
+                ,webui->pkt_timebase, tmpdst) - strm_st_pts + base_pdts;
+            if (webui->pkt->pts == last_pts) {
+                webui->pkt->pts++;
             }
-            if (pkt->stream_index == webui->wfile.audio.index) {
+            if (webui->pkt->stream_index == webui->wfile.audio.index) {
                 webui->wfile.audio.base_pdts = base_pdts;
                 webui->wfile.video.base_pdts = av_rescale_q(base_pdts
                     , webui->wfile.audio.strm->time_base
@@ -212,24 +246,31 @@ static void webu_mpegts_packet_pts(ctx_webui *webui, AVPacket *pkt, int indx)
                     , webui->wfile.audio.strm->time_base);
             }
         }
-        if (pkt->pts <= 0) {
-            pkt->pts = 1;
+        if (webui->pkt->pts <= 0) {
+            if (webui->pkt->pts < 0) {
+                LOG_MSG(DBG, NO_ERRNO
+                    ,"Skipping %d",webui->pkt->pts);
+
+                abort();
+                return;
+            }
+            webui->pkt->pts = 1;
         }
     }
 
-    if (pkt->dts != AV_NOPTS_VALUE) {
-        if (webui->file_cnt == webui->chitm->pktarray[indx].file_cnt) {
-            pkt->dts = av_rescale_q(pkt->dts - file_st_pts , tbase, tmpdst) -
-                strm_st_pts + base_pdts;
+    if (webui->pkt->dts != AV_NOPTS_VALUE) {
+        if (webui->file_cnt == webui->pkt_file_cnt) {
+            webui->pkt->dts = av_rescale_q(webui->pkt->dts - webui->pkt_start_pts
+                ,webui->pkt_timebase, tmpdst) - strm_st_pts + base_pdts;
         } else {
-            webui->file_cnt = webui->chitm->pktarray[indx].file_cnt;
+            webui->file_cnt = webui->pkt_file_cnt;
             base_pdts = last_pts + strm_st_pts;
-            pkt->dts = av_rescale_q(pkt->dts - file_st_pts , tbase, tmpdst) -
-                strm_st_pts + base_pdts;
-            if (pkt->dts == last_pts) {
-                pkt->dts++;
+            webui->pkt->dts = av_rescale_q(webui->pkt->dts - webui->pkt_start_pts
+                , webui->pkt_timebase, tmpdst) - strm_st_pts + base_pdts;
+            if (webui->pkt->dts == last_pts) {
+                webui->pkt->dts++;
             }
-            if (pkt->stream_index == webui->wfile.audio.index) {
+            if (webui->pkt->stream_index == webui->wfile.audio.index) {
                 webui->wfile.audio.base_pdts = base_pdts;
                 webui->wfile.video.base_pdts = av_rescale_q(base_pdts
                     , webui->wfile.audio.strm->time_base
@@ -241,23 +282,32 @@ static void webu_mpegts_packet_pts(ctx_webui *webui, AVPacket *pkt, int indx)
                     , webui->wfile.audio.strm->time_base);
             }
         }
-        if (pkt->dts <= 0) {
-            pkt->dts = 1;
+        if (webui->pkt->dts <= 0) {
+            webui->pkt->dts = 1;
         }
     }
 
-    ts_interval = pkt->duration;
-    pkt->duration = av_rescale_q(ts_interval, tbase, tmpdst);
+    ts_interval = webui->pkt->duration;
+    webui->pkt->duration = av_rescale_q(ts_interval,webui->pkt_timebase, tmpdst);
+    bool chk;
+    if (webui->pkt->flags & AV_PKT_FLAG_KEY) {
+        chk = true;
+    } else {
+        chk = false;
+    }
+    if (chk) {
+        chk = false;
+    }
 /*
     LOG_MSG(DBG, NO_ERRNO
         ,"data %d %d src %d  %d/%d newpts %d %d tb-a %d/%d %d %d tb-v %d/%d %d %d"
-        , pkt->stream_index
+        , webui->pkt->stream_index
         , webui->file_cnt
         , src_pts
-        , webui->chitm->pktarray[indx].timebase.num
-        , webui->chitm->pktarray[indx].timebase.den
-        , pkt->pts
-        , pkt->dts
+        , webui->pkt_timebase.num
+        , webui->pkt_timebase.den
+        , webui->pkt->pts
+        , chk
         , webui->wfile.audio.strm->time_base.num
         , webui->wfile.audio.strm->time_base.den
         , webui->wfile.audio.base_pdts
@@ -271,80 +321,95 @@ static void webu_mpegts_packet_pts(ctx_webui *webui, AVPacket *pkt, int indx)
 }
 
 /* Write the packet in the array at indx to the output format context */
-static void webu_mpegts_packet_write(ctx_webui *webui, int indx)
+static void webu_mpegts_packet_write(ctx_webui *webui)
 {
-    char errstr[128];
     int retcd;
-    AVPacket *pkt;
+    char errstr[128];
 
-    pkt = nullptr;
-    pkt = mypacket_alloc(pkt);
+    if (finish == true) {
+        return;
+    }
 
-    pthread_mutex_lock(&webui->chitm->mtx_pktarray);
-        webui->chitm->pktarray[indx].iswritten = true;
-        webui->chitm->pktarray_lastwritten = indx;
-        retcd = mycopy_packet(pkt, webui->chitm->pktarray[indx].packet);
-        if (retcd < 0) {
-            av_strerror(retcd, errstr, sizeof(errstr));
-            LOG_MSG(INF, NO_ERRNO, "av_copy_packet: %s",errstr);
-            mypacket_free(pkt);
-            pthread_mutex_unlock(&webui->chitm->mtx_pktarray);
-            return;
-        }
-    pthread_mutex_unlock(&webui->chitm->mtx_pktarray);
-
-    /* The source packets have the index of chitm->ofile, we need to
-       make sure they match the index of webui->wfile.  If not fix them
-    */
     if ((webui->wfile.audio.index != webui->chitm->ofile.audio.index) ||
         (webui->wfile.video.index != webui->chitm->ofile.video.index)) {
-        if (pkt->stream_index == webui->chitm->ofile.audio.index) {
+        if (webui->pkt->stream_index == webui->chitm->ofile.audio.index) {
             LOG_MSG(DBG, NO_ERRNO,"Swapping audio");
-            pkt->stream_index = webui->wfile.audio.index;
-        } else if (pkt->stream_index == webui->chitm->ofile.video.index) {
+            webui->pkt->stream_index = webui->wfile.audio.index;
+        } else if (webui->pkt->stream_index == webui->chitm->ofile.video.index) {
             LOG_MSG(DBG, NO_ERRNO,"Swapping video");
-            pkt->stream_index = webui->wfile.video.index;
+            webui->pkt->stream_index = webui->wfile.video.index;
         }
     }
 
-    webu_mpegts_packet_pts(webui, pkt, indx);
+    webu_mpegts_packet_pts(webui);
 
-    if (pkt->stream_index == webui->wfile.audio.index) {
-        if (pkt->pts > webui->wfile.audio.last_pts) {
-            webui->wfile.audio.last_pts = pkt->pts;
+    if (webui->pkt->stream_index == webui->wfile.audio.index) {
+        if (webui->pkt->pts > webui->wfile.audio.last_pts) {
+            webui->wfile.audio.last_pts = webui->pkt->pts;
         } else {
             return;
         }
     } else {
-        if (pkt->pts > webui->wfile.video.last_pts) {
-            webui->wfile.video.last_pts = pkt->pts;
+        if (webui->pkt->pts > webui->wfile.video.last_pts) {
+            webui->wfile.video.last_pts = webui->pkt->pts;
         } else {
             return;
         }
     }
 
-    webu_mpegts_packet_wait(webui, pkt);
+    webu_mpegts_packet_wait(webui);
 
-/*
-    LOG_MSG(DBG, NO_ERRNO,"dx %d strm %d newpts %d srcpts %d newdts %d srcdts %d al %d vl %d"
-            ,indx, pkt->stream_index
-            , pkt->pts
-            ,webui->chitm->pktarray[indx].packet->pts
-            , pkt->dts
-            ,webui->chitm->pktarray[indx].packet->dts
-            ,webui->wfile.audio.last_pts
-            ,webui->wfile.video.last_pts);
-*/
-
-    retcd = av_interleaved_write_frame(webui->wfile.fmt_ctx, pkt);
+    retcd = av_interleaved_write_frame(webui->wfile.fmt_ctx, webui->pkt);
     if (retcd < 0) {
         av_strerror(retcd, errstr, sizeof(errstr));
         LOG_MSG(ERR, NO_ERRNO
             ,"Error writing frame index %d id %d err %s"
-            , indx, webui->chitm->pktarray[indx].idnbr, errstr);
+            , webui->pkt_index, webui->pkt_idnbr, errstr);
     }
-    mypacket_free(pkt);
+
 }
+
+static void webu_mpegts_pkt_copy(ctx_webui *webui, int indx)
+{
+    int retcd;
+    char errstr[128];
+
+    retcd = mycopy_packet(webui->pkt, webui->chitm->pktarray[indx].packet);
+    if (retcd < 0) {
+        av_strerror(retcd, errstr, sizeof(errstr));
+        LOG_MSG(INF, NO_ERRNO, "av_copy_packet: %s",errstr);
+        mypacket_free(webui->pkt);
+        webui->pkt = nullptr;
+        return;
+    }
+    webui->pkt_index     = indx;
+    webui->pkt_idnbr     = webui->chitm->pktarray[indx].idnbr;
+    webui->pkt_start_pts = webui->chitm->pktarray[indx].start_pts;
+    webui->pkt_timebase  = webui->chitm->pktarray[indx].timebase;
+    webui->pkt_file_cnt  = webui->chitm->pktarray[indx].file_cnt;
+
+    return;
+}
+
+static bool webu_mpegts_pkt_get(ctx_webui *webui, int indx)
+{
+    bool pktready;
+    pthread_mutex_lock(&webui->chitm->mtx_pktarray);
+        if ((webui->chitm->pktarray[indx].packet != nullptr) &&
+            (webui->chitm->pktarray[indx].idnbr > webui->pkt_idnbr) ) {
+            webu_mpegts_pkt_copy(webui, indx);
+            if (webui->pkt == nullptr) {
+                pktready = false;
+            } else {
+                pktready = true;
+            }
+        } else {
+            pktready = false;
+        }
+    pthread_mutex_unlock(&webui->chitm->mtx_pktarray);
+    return pktready;
+}
+
 
 static void webu_mpegts_getimg(ctx_webui *webui)
 {
@@ -358,39 +423,28 @@ static void webu_mpegts_getimg(ctx_webui *webui)
         }
     pthread_mutex_unlock(&webui->chitm->mtx_pktarray);
 
-    indx_next = webui->chitm->pktarray_lastwritten;
+    indx_next = webui->pkt_index;
     indx_next = pktarray_indx_next(indx_next);
 
-    pthread_mutex_lock(&webui->chitm->mtx_pktarray);
-        if ((webui->chitm->pktarray[indx_next].iswritten == false) &&
-            (webui->chitm->pktarray[indx_next].packet != nullptr) &&
-            (webui->chitm->pktarray_index != indx_next) ) {
-            pktready = true;
-        } else {
-            pktready = false;
-        }
-    pthread_mutex_unlock(&webui->chitm->mtx_pktarray);
+    webui->pkt = mypacket_alloc(webui->pkt);
+
+    pktready = webu_mpegts_pkt_get(webui, indx_next);
 
     chk = 0;
-    while ((chk < 1000) && (pktready == false) && (finish == false)) {
-        SLEEP(0, 25000000L);
-        pthread_mutex_lock(&webui->chitm->mtx_pktarray);
-            if ((webui->chitm->pktarray[indx_next].iswritten == false) &&
-                (webui->chitm->pktarray[indx_next].packet != nullptr) &&
-                (webui->chitm->pktarray_index != indx_next) ) {
-                pktready = true;
-            } else {
-                pktready = false;
-            }
-        pthread_mutex_unlock(&webui->chitm->mtx_pktarray);
+    while ((chk < 1000000) && (pktready == false) && (finish == false)) {
+        SLEEP(0, webui->msec_cnt * 1000);
+        pktready = webu_mpegts_pkt_get(webui, indx_next);
         chk++;
     }
-    if (chk == 1000) {
-        LOG_MSG(INF, NO_ERRNO,"Excessive wait for new packet");
-    } else {
-        webu_mpegts_packet_write(webui, indx_next);
-    }
 
+    if (chk == 1000000) {
+        LOG_MSG(INF, NO_ERRNO,"Excessive wait for new packet");
+        webui->msec_cnt++;
+    } else {
+        webu_mpegts_packet_write(webui);
+    }
+    mypacket_free(webui->pkt);
+    webui->pkt = nullptr;
 }
 
 static int webu_mpegts_avio_buf(void *opaque, uint8_t *buf, int buf_size)
@@ -401,13 +455,6 @@ static int webu_mpegts_avio_buf(void *opaque, uint8_t *buf, int buf_size)
         webui->resp_size = (size_t)(buf_size + webui->resp_used);
         webui->resp_image = (unsigned char*)realloc(
             webui->resp_image, webui->resp_size);
-/*
-        LOG_MSG(DBG, NO_ERRNO
-            ,"resp_image reallocated %d %d %d"
-            ,webui->resp_size
-            ,webui->resp_used
-            ,buf_size);
-*/
     }
 
     memcpy(webui->resp_image + webui->resp_used, buf, buf_size);
@@ -448,17 +495,10 @@ static ssize_t webu_mpegts_response(void *cls, uint64_t pos, char *buf, size_t m
         webui->stream_pos = 0;
         webui->resp_used = 0;
     }
-/*
-    LOG_MSG(DBG, NO_ERRNO
-            ,"pos %d sent %d used %d"
-            ,webui->stream_pos
-            ,sent_bytes
-            ,webui->resp_used);
-*/
     return sent_bytes;
 }
 
-static int webu_mpegts_streams_video(ctx_webui *webui)
+static int webu_mpegts_streams_video_h264(ctx_webui *webui)
 {
     int retcd;
     char errstr[128];
@@ -468,8 +508,8 @@ static int webu_mpegts_streams_video(ctx_webui *webui)
     AVStream        *stream;
 
     opts = NULL;
-    webui->wfile.fmt_ctx->video_codec_id = MY_CODEC_ID_H264;
-    webui->wfile.fmt_ctx->video_codec = avcodec_find_encoder(MY_CODEC_ID_H264);
+    webui->wfile.fmt_ctx->video_codec_id = AV_CODEC_ID_H264;
+    webui->wfile.fmt_ctx->video_codec = avcodec_find_encoder(AV_CODEC_ID_H264);
     encoder = webui->wfile.fmt_ctx->video_codec;
 
     webui->wfile.video.strm = avformat_new_stream(webui->wfile.fmt_ctx
@@ -492,24 +532,28 @@ static int webu_mpegts_streams_video(ctx_webui *webui)
     enc_ctx = webui->chitm->ofile.video.codec_ctx;
     wfl_ctx = webui->wfile.video.codec_ctx;
 
-    wfl_ctx->gop_size      = 15;
-    wfl_ctx->codec_id      = MY_CODEC_ID_H264;
-    wfl_ctx->codec_type    = AVMEDIA_TYPE_VIDEO;
-    wfl_ctx->bit_rate      = 400000;
+    wfl_ctx->gop_size      = enc_ctx->gop_size;
+    wfl_ctx->codec_id      = enc_ctx->codec_id;
+    wfl_ctx->codec_type    = enc_ctx->codec_type;
+    wfl_ctx->bit_rate      = enc_ctx->bit_rate;
     wfl_ctx->width         = enc_ctx->width;
     wfl_ctx->height        = enc_ctx->height;
-    wfl_ctx->time_base.num = 1;
-    wfl_ctx->time_base.den = 90000;
-    wfl_ctx->pix_fmt       = MY_PIX_FMT_YUV420P;
-    wfl_ctx->max_b_frames  = 1;
-    wfl_ctx->flags         |= MY_CODEC_FLAG_GLOBAL_HEADER;
-    wfl_ctx->framerate.num  = 30;
-    wfl_ctx->framerate.den  = 1;
-    av_opt_set(wfl_ctx->priv_data, "profile", "main", 0);
-    av_opt_set(wfl_ctx->priv_data, "crf", "22", 0);
-    av_opt_set(wfl_ctx->priv_data, "tune", "zerolatency", 0);
-    av_opt_set(wfl_ctx->priv_data, "preset", "superfast",0);
-    av_dict_set(&opts, "movflags", "empty_moov", 0);
+    wfl_ctx->time_base     = enc_ctx->time_base;
+    wfl_ctx->pix_fmt       = enc_ctx->pix_fmt;
+    wfl_ctx->max_b_frames  = enc_ctx->max_b_frames;
+    wfl_ctx->framerate     = enc_ctx->framerate;
+    wfl_ctx->keyint_min    = enc_ctx->keyint_min;
+
+    av_dict_set( &opts, "profile", "baseline", 0 );
+    av_dict_set( &opts, "crf", "17", 0 );
+    av_dict_set( &opts, "tune", "zerolatency", 0 );
+    av_dict_set( &opts, "preset", "superfast", 0 );
+    av_dict_set( &opts, "keyint", "5", 0 );
+    av_dict_set( &opts, "scenecut", "200", 0 );
+
+    if (webui->wfile.fmt_ctx->oformat->flags & AVFMT_GLOBALHEADER) {
+        enc_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+    }
 
     retcd = avcodec_open2(wfl_ctx, encoder, &opts);
     if (retcd < 0) {
@@ -520,19 +564,81 @@ static int webu_mpegts_streams_video(ctx_webui *webui)
     }
     av_dict_free(&opts);
 
-    wfl_ctx->gop_size      = 15;
-    wfl_ctx->codec_id      = MY_CODEC_ID_H264;
-    wfl_ctx->codec_type    = AVMEDIA_TYPE_VIDEO;
-    wfl_ctx->bit_rate      = 400000;
+    retcd = avcodec_parameters_from_context(stream->codecpar, wfl_ctx);
+    if (retcd < 0) {
+        av_strerror(retcd, errstr, sizeof(errstr));
+        LOG_MSG(ERR, NO_ERRNO
+            ,"Failed to copy decoder parameters!: %s", errstr);
+        return -1;
+    }
+    stream->time_base = webui->chitm->ofile.video.strm->time_base;
+
+    return 0;
+}
+
+static int webu_mpegts_streams_video_mpeg(ctx_webui *webui)
+{
+    int retcd;
+    char errstr[128];
+    AVCodecContext  *wfl_ctx, *enc_ctx;
+    AVDictionary    *opts;
+    const AVCodec   *encoder;
+    AVStream        *stream;
+
+    opts = NULL;
+    webui->wfile.fmt_ctx->video_codec_id = AV_CODEC_ID_MPEG2VIDEO;
+    webui->wfile.fmt_ctx->video_codec = avcodec_find_encoder(AV_CODEC_ID_MPEG2VIDEO);
+
+    encoder = webui->wfile.fmt_ctx->video_codec;
+
+    webui->wfile.video.strm = avformat_new_stream(webui->wfile.fmt_ctx, encoder);
+    if (webui->wfile.video.strm == nullptr) {
+        LOG_MSG(ERR, NO_ERRNO, "Could not alloc video stream");
+        return -1;
+    }
+    webui->wfile.video.index = webui->wfile.video.strm->index;
+    stream = webui->wfile.video.strm;
+
+    webui->wfile.video.codec_ctx = avcodec_alloc_context3(encoder);
+    if (webui->wfile.video.codec_ctx == nullptr) {
+        LOG_MSG(NTC, NO_ERRNO
+            , "%s: Could not allocate video context"
+            , webui->chitm->ch_nbr.c_str());
+        return -1;
+    }
+
+    enc_ctx = webui->chitm->ofile.video.codec_ctx;
+    wfl_ctx = webui->wfile.video.codec_ctx;
+
+    wfl_ctx->codec_id      = enc_ctx->codec_id;
+    wfl_ctx->codec_type    = enc_ctx->codec_type;
     wfl_ctx->width         = enc_ctx->width;
     wfl_ctx->height        = enc_ctx->height;
-    wfl_ctx->time_base.num = 1;
-    wfl_ctx->time_base.den = 90000;
-    wfl_ctx->pix_fmt       = MY_PIX_FMT_YUV420P;
-    wfl_ctx->max_b_frames  = 1;
-    wfl_ctx->flags         |= MY_CODEC_FLAG_GLOBAL_HEADER;
-    wfl_ctx->framerate.num  = 30;
-    wfl_ctx->framerate.den  = 1;
+    wfl_ctx->time_base     = enc_ctx->time_base;
+    wfl_ctx->max_b_frames  = enc_ctx->max_b_frames;
+    wfl_ctx->framerate     = enc_ctx->framerate;
+    wfl_ctx->bit_rate      = enc_ctx->bit_rate;
+    wfl_ctx->gop_size      = enc_ctx->gop_size;
+    wfl_ctx->pix_fmt       = enc_ctx->pix_fmt;
+    wfl_ctx->sw_pix_fmt    = enc_ctx->sw_pix_fmt;
+    if (webui->wfile.fmt_ctx->oformat->flags & AVFMT_GLOBALHEADER) {
+        wfl_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+    }
+
+    retcd = avcodec_open2(wfl_ctx, encoder, &opts);
+    if (retcd < 0) {
+        av_strerror(retcd, errstr, sizeof(errstr));
+        LOG_MSG(NTC, NO_ERRNO
+            , "%s: Could not open video encoder: %s %dx%d %d %d %d/%d"
+            , webui->chitm->ch_nbr.c_str(), errstr
+            , wfl_ctx->width, wfl_ctx->height
+            , wfl_ctx->pix_fmt, wfl_ctx->time_base.den
+            , wfl_ctx->framerate.num, wfl_ctx->framerate.den);
+        av_dict_free(&opts);
+        abort();
+        return -1;
+    }
+    av_dict_free(&opts);
 
     retcd = avcodec_parameters_from_context(stream->codecpar, wfl_ctx);
     if (retcd < 0) {
@@ -541,7 +647,21 @@ static int webu_mpegts_streams_video(ctx_webui *webui)
             ,"Failed to copy decoder parameters!: %s", errstr);
         return -1;
     }
+    stream->time_base = webui->chitm->ofile.video.strm->time_base;
+    stream->r_frame_rate = enc_ctx->framerate;
+    stream->avg_frame_rate= enc_ctx->framerate;
 
+/*
+    LOG_MSG(NTC, NO_ERRNO
+        , "%s: Opened video encoder: %dx%d %d %d %d/%d %d/%d %d/%d"
+        , webui->chitm->ch_nbr.c_str()
+        , wfl_ctx->width, wfl_ctx->height
+        , wfl_ctx->pix_fmt, wfl_ctx->time_base.den
+        , wfl_ctx->framerate.num, wfl_ctx->framerate.den
+        , webui->wfile.video.strm->avg_frame_rate.num,webui->wfile.video.strm->avg_frame_rate.den
+        , webui->wfile.video.strm->r_frame_rate.num, webui->wfile.video.strm->r_frame_rate.den
+        );
+*/
     return 0;
 }
 
@@ -623,7 +743,11 @@ void webu_mpegts_open(ctx_webui *webui)
 
     pthread_mutex_lock(&webui->chitm->mtx_ifmt);
         if (webui->chitm->ofile.video.index != -1) {
-            retcd = webu_mpegts_streams_video(webui);
+            if (webui->chitm->ch_encode == "h264") {
+                retcd = webu_mpegts_streams_video_h264(webui);
+            } else {
+                retcd = webu_mpegts_streams_video_mpeg(webui);
+            }
             if (retcd < 0) {
                 pthread_mutex_unlock(&webui->chitm->mtx_ifmt);
                 return;
@@ -701,31 +825,31 @@ mhdrslt webu_mpegts_main(ctx_webui *webui)
 
 static void webu_stream_cnct_cnt(ctx_webui *webui)
 {
-    int indx;
+    int indx_curr;
 
     webui->chitm->cnct_cnt++;
 
-    /* We set the last written to be behind the index of reader of the file
-      so that the infile keeps processing and replacing the packets in the
-      array ring until it reaches the lastwritten index.
-    */
-    indx = pktarray_get_index(webui->chitm);
-    if (indx < 0) {
-        indx = 0;
-    }
-    if (webui->chitm->pktarray_count != 0) {
-        webui->chitm->pktarray[indx].iswritten = false;
-    }
-    indx = pktarray_indx_prev(indx);
-
-    webui->chitm->pktarray_lastwritten = indx;
-
-    //if (webui->chitm->cnct_cnt == 1) {
+    if (webui->chitm->cnct_cnt == 1) {
         /* This is the first connection so we need to wait a bit
-         * so that the loop on the other thread can update image
+         * so that the loop on the other thread can update array
          */
-    //    SLEEP(0,100000000L);
-    //}
+        SLEEP(0,100000000L);
+    }
+
+    indx_curr = pktarray_get_index(webui->chitm);
+    if (indx_curr < 0) {
+        indx_curr = 0;
+    }
+
+    if (webui->chitm->pktarray_count != 0) {
+        webui->pkt_index = (int)(webui->chitm->pktarray_count / 2) + indx_curr;
+        if (webui->pkt_index > webui->chitm->pktarray_count) {
+            webui->pkt_index -= webui->chitm->pktarray_count;
+        }
+    } else {
+        webui->pkt_index = 0;
+    }
+    webui->pkt_idnbr = 1;
 
 }
 

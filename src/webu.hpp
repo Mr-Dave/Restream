@@ -73,15 +73,22 @@
         size_t                      resp_used;      /* The amount of the response page used */
         size_t                      aviobuf_sz;     /* The size of the mpegts avio buffer */
 
-//        struct timespec             start_time;     /* Start time of the mpegts stream*/
-
         ctx_file_info               wfile;
         int64_t                     file_cnt;
+        int                         start_cnt;
         ctx_channel_item            *chitm;
         int                         channel_indx;   /* Index number of the channel */
         int                         channel_id;     /* channel id number requested */
-        enum WEBUI_CNCT             cnct_type;      /* Type of connection we are processing */
 
+        int64_t                     msec_cnt;
+        AVPacket                    *pkt;
+        int                         pkt_index;
+        int64_t                     pkt_idnbr;
+        int64_t                     pkt_start_pts;
+        AVRational                  pkt_timebase;
+        int64_t                     pkt_file_cnt;
+
+        enum WEBUI_CNCT             cnct_type;      /* Type of connection we are processing */
         enum WEBUI_METHOD           cnct_method;    /* Connection method.  Get or Post */
 
         uint64_t                    stream_pos;     /* Stream position of sent image */

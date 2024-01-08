@@ -24,7 +24,6 @@
     void decoder_get_ts(ctx_channel_item *chitm);
     void infile_read(ctx_channel_item *chitm);
     void streams_close(ctx_channel_item *chitm);
-    int pktarray_get_lastwritten(ctx_channel_item *chitm);
     int pktarray_get_index(ctx_channel_item *chitm);
     int pktarray_indx_next(int index);
     int pktarray_indx_prev(int index);

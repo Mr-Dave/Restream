@@ -136,6 +136,7 @@
         std::string     ch_dir;
         std::string     ch_nbr;
         std::string     ch_sort;
+        std::string     ch_encode;
 
         int     ch_index;
         bool    ch_running;
@@ -149,7 +150,7 @@
         ctx_file_info   ifile;
         ctx_file_info   ofile;
         int64_t         file_cnt;
-        AVPacket        *pkt;
+        AVPacket        *pkt_in;
         AVFrame         *frame;
         AVAudioFifo     *fifo;
 
@@ -159,7 +160,6 @@
         int         pktarray_count;
         int         pktarray_index;
         int64_t     pktnbr;
-        int         pktarray_lastwritten;
 
         pthread_mutex_t    mtx_pktarray;
         pthread_mutex_t    mtx_ifmt;
