@@ -22,7 +22,7 @@
     /* Some defines of lengths for our buffers */
     #define WEBUI_LEN_PARM 512          /* Parameters specified */
     #define WEBUI_LEN_URLI 512          /* Maximum URL permitted */
-    #define WEBUI_LEN_RESP 1024         /* Initial response size */
+    #define WEBUI_LEN_RESP 2048         /* Initial response size */
     #define WEBUI_MHD_OPTS 10           /* Maximum number of options permitted for MHD */
 
     #define WEBUI_POST_BFRSZ  512
@@ -87,6 +87,7 @@
         int64_t                     pkt_start_pts;
         AVRational                  pkt_timebase;
         int64_t                     pkt_file_cnt;
+        bool                        pkt_key;
 
         enum WEBUI_CNCT             cnct_type;      /* Type of connection we are processing */
         enum WEBUI_METHOD           cnct_method;    /* Connection method.  Get or Post */

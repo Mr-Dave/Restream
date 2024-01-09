@@ -79,12 +79,6 @@ static void webu_mpegts_packet_wait(ctx_webui *webui)
     SLEEP(0, webui->msec_cnt * 1000);
     return;
 
-    /* Do not wait when we are just starting up the connection.*/
-    if (webui->start_cnt < 0) {
-        webui->start_cnt--;
-        return;
-    }
-
     /* How much time the pts wants us to be at since the start of the movie */
     if (webui->pkt->stream_index == webui->wfile.audio.index) {
         pts_diff = av_rescale_q(
@@ -251,7 +245,7 @@ static void webu_mpegts_packet_pts(ctx_webui *webui)
                 LOG_MSG(DBG, NO_ERRNO
                     ,"Skipping %d",webui->pkt->pts);
 
-                abort();
+                //abort();
                 return;
             }
             webui->pkt->pts = 1;
@@ -358,6 +352,18 @@ static void webu_mpegts_packet_write(ctx_webui *webui)
     }
 
     webu_mpegts_packet_wait(webui);
+/*    
+    LOG_MSG(NTC, NO_ERRNO
+        ,"%s: Writing frame index %d id %d"
+        , webui->chitm->ch_nbr.c_str()
+        , webui->pkt_index, webui->pkt_idnbr);
+*/
+    if ((webui->start_cnt == 1) &&
+        (webui->pkt_key == false) &&
+        (webui->pkt->stream_index = webui->chitm->ofile.video.index)) {
+        return;
+    }
+    webui->start_cnt = 0;
 
     retcd = av_interleaved_write_frame(webui->wfile.fmt_ctx, webui->pkt);
     if (retcd < 0) {
@@ -387,6 +393,7 @@ static void webu_mpegts_pkt_copy(ctx_webui *webui, int indx)
     webui->pkt_start_pts = webui->chitm->pktarray[indx].start_pts;
     webui->pkt_timebase  = webui->chitm->pktarray[indx].timebase;
     webui->pkt_file_cnt  = webui->chitm->pktarray[indx].file_cnt;
+    webui->pkt_key       = webui->chitm->pktarray[indx].iskey;
 
     return;
 }
@@ -732,7 +739,7 @@ static int webu_mpegts_streams_audio(ctx_webui *webui)
 
 void webu_mpegts_open(ctx_webui *webui)
 {
-    int retcd;
+    int retcd, indx_curr;
     char errstr[128];
     unsigned char   *buf_image;
     AVDictionary    *opts;
@@ -762,12 +769,12 @@ void webu_mpegts_open(ctx_webui *webui)
         }
     pthread_mutex_unlock(&webui->chitm->mtx_ifmt);
 
-    webui->resp_image  =(unsigned char*) mymalloc(40960);
-    memset(webui->resp_image,'\0',4096);
-    webui->resp_size = 4096;
+    webui->resp_image  =(unsigned char*) mymalloc(WEBUI_LEN_RESP * 10);
+    memset(webui->resp_image,'\0',WEBUI_LEN_RESP);
+    webui->resp_size = WEBUI_LEN_RESP;
     webui->resp_used = 0;
 
-    webui->aviobuf_sz = 4096;
+    webui->aviobuf_sz = WEBUI_LEN_RESP;
     buf_image = (unsigned char*)av_malloc(webui->aviobuf_sz);
     webui->wfile.fmt_ctx->pb = avio_alloc_context(
         buf_image, (int)webui->aviobuf_sz, 1, webui
@@ -788,6 +795,24 @@ void webu_mpegts_open(ctx_webui *webui)
 
     webui->stream_pos = 0;
     webui->resp_used = 0;
+
+    indx_curr = pktarray_get_index(webui->chitm);
+    if (indx_curr < 0) {
+        indx_curr = 0;
+    }
+
+    webui->pkt_index = (int)(webui->chitm->pktarray_count / 2) + indx_curr;
+    if (webui->pkt_index > webui->chitm->pktarray_count) {
+        webui->pkt_index -= webui->chitm->pktarray_count;
+    }
+    webui->pkt_idnbr = 1;
+    webui->start_cnt = 1;
+
+    LOG_MSG(NTC, NO_ERRNO
+        , "%s: Setting start %d %d"
+        , webui->chitm->ch_nbr.c_str()
+        , webui->pkt_index, indx_curr);
+
 
 }
 
@@ -825,31 +850,25 @@ mhdrslt webu_mpegts_main(ctx_webui *webui)
 
 static void webu_stream_cnct_cnt(ctx_webui *webui)
 {
-    int indx_curr;
+    int indx, chk;
 
-    webui->chitm->cnct_cnt++;
-
-    if (webui->chitm->cnct_cnt == 1) {
-        /* This is the first connection so we need to wait a bit
-         * so that the loop on the other thread can update array
-         */
-        SLEEP(0,100000000L);
-    }
-
-    indx_curr = pktarray_get_index(webui->chitm);
-    if (indx_curr < 0) {
-        indx_curr = 0;
-    }
-
-    if (webui->chitm->pktarray_count != 0) {
-        webui->pkt_index = (int)(webui->chitm->pktarray_count / 2) + indx_curr;
-        if (webui->pkt_index > webui->chitm->pktarray_count) {
-            webui->pkt_index -= webui->chitm->pktarray_count;
+    if (webui->chitm->cnct_cnt == 0) {
+        for (indx=0; indx < (int)webui->chitm->pktarray.size(); indx++) {
+            if (webui->chitm->pktarray[indx].packet != nullptr) {
+                mypacket_free(webui->chitm->pktarray[indx].packet);
+                webui->chitm->pktarray[indx].packet = nullptr;
+            }
         }
+        webui->chitm->cnct_cnt++;
+        webui->chitm->pktarray_start = webui->chitm->pktarray_count;
+        chk = 0;
+        while ((webui->chitm->pktarray_start >0) && (chk <100000)) {
+            SLEEP(0,10000L);
+            chk++;
+        }        
     } else {
-        webui->pkt_index = 0;
+        webui->chitm->cnct_cnt++;
     }
-    webui->pkt_idnbr = 1;
 
 }
 
@@ -877,7 +896,7 @@ static int webu_stream_checks(ctx_webui *webui)
     }
     if (webui->channel_indx < 0) {
         LOG_MSG(ERR, NO_ERRNO
-                , "Invalid channel specified: %s",webui->url.c_str());
+            , "Invalid channel specified: %s",webui->url.c_str());
             return -1;
         }
 

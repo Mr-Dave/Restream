@@ -182,6 +182,7 @@ void channel_process_defaults(ctx_channel_item *chitm)
     chitm->ifile.fmt_ctx = nullptr;
     chitm->ifile.time_start = -1;
     chitm->ofile = chitm->ifile;
+    chitm->pktarray_start = 0;
 }
 
 void channel_process(ctx_app *app, int chindx)
@@ -206,9 +207,15 @@ void channel_process(ctx_app *app, int chindx)
                 guide_process(chitm);
             }
             channel_process_defaults(chitm);
-            decoder_init(chitm);
-            encoder_init(chitm);
-            decoder_get_ts(chitm);
+            if (decoder_init(chitm) != 0) {
+                continue;
+            }
+            if (encoder_init(chitm) != 0) {
+                continue;
+            }
+            if (decoder_get_ts(chitm) != 0) {
+                continue;
+            }
 
             pthread_mutex_unlock(&chitm->mtx_ifmt);
             infile_read(chitm);
@@ -300,6 +307,10 @@ void logger(void *var1, int errnbr, const char *fmt, va_list vlist)
     vsnprintf(buff, sizeof(buff), fmt, vlist);
 
     buff[strlen(buff)-1] = 0;
+
+    if (strstr(buff, "forced frame type") != nullptr) {
+        return;        
+    }
 
     if (errnbr < AV_LOG_VERBOSE) {
         LOG_MSG(INF, NO_ERRNO,"ffmpeg message: %s",buff );

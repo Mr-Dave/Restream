@@ -94,7 +94,7 @@ static void webu_context_init(ctx_app *app, ctx_webui *webui)
     webui->wfile.time_start = -1;
     webui->file_cnt = 0;
     webui->start_cnt = 50;
-    webui->msec_cnt = 10;
+    webui->msec_cnt = 50;
     webui->pkt = nullptr;
     webui->pkt_index = 0;
     webui->pkt_idnbr =1;

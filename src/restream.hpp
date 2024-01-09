@@ -159,6 +159,7 @@
         std::vector<ctx_packet_item> pktarray;
         int         pktarray_count;
         int         pktarray_index;
+        int         pktarray_start;
         int64_t     pktnbr;
 
         pthread_mutex_t    mtx_pktarray;
