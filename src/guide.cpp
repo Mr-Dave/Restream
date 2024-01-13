@@ -32,7 +32,9 @@
 #include "infile.hpp"
 #include "webu.hpp"
 
-void guide_times(std::string filenm, std::string &time_st,std::string &time_en)
+void guide_times(
+    std::string f1, std::string &st1,std::string &en1,
+    std::string f2, std::string &st2,std::string &en2)
 {
     AVFormatContext *guidefmt_ctx;
     int64_t         dur_time;
@@ -50,13 +52,13 @@ void guide_times(std::string filenm, std::string &time_st,std::string &time_en)
     time(&timenow);
     time_info = localtime(&timenow);
     strftime(timebuf, sizeof(timebuf), "%Y%m%d%H%M%S %z", time_info);
-    time_st = timebuf;
+    st1 = timebuf;
 
     guidefmt_ctx = nullptr;
-    retcd = avformat_open_input(&guidefmt_ctx,filenm.c_str(), 0, 0);
+    retcd = avformat_open_input(&guidefmt_ctx,f1.c_str(), 0, 0);
     if (retcd < 0) {
-        time_en = time_st;
-        LOG_MSG(NTC, NO_ERRNO, "Could not open file %s",filenm.c_str());
+        en1 = st1;
+        LOG_MSG(NTC, NO_ERRNO, "Could not open file %s",f1.c_str());
         return;
     }
     dur_time = av_rescale(guidefmt_ctx->duration, 1 , AV_TIME_BASE);
@@ -66,7 +68,27 @@ void guide_times(std::string filenm, std::string &time_st,std::string &time_en)
     timenow = timenow + (int16_t)(dur_time);
     time_info = localtime(&timenow);
     strftime(timebuf, sizeof(timebuf), "%Y%m%d%H%M%S %z", time_info);
-    time_en = timebuf;
+    en1 = timebuf;
+
+    timenow++;
+    time_info = localtime(&timenow);
+    strftime(timebuf, sizeof(timebuf), "%Y%m%d%H%M%S %z", time_info);
+    st2 = timebuf;
+
+    retcd = avformat_open_input(&guidefmt_ctx, f2.c_str(), 0, 0);
+    if (retcd < 0) {
+        en2 = st2;
+        LOG_MSG(NTC, NO_ERRNO, "Could not open file %s",f2.c_str());
+        return;
+    }
+    dur_time = av_rescale(guidefmt_ctx->duration, 1 , AV_TIME_BASE);
+    avformat_close_input(&guidefmt_ctx);
+    guidefmt_ctx = nullptr;
+
+    timenow = timenow + (int16_t)(dur_time);
+    time_info = localtime(&timenow);
+    strftime(timebuf, sizeof(timebuf), "%Y%m%d%H%M%S %z", time_info);
+    en2 = timebuf;
 
 }
 
@@ -79,7 +101,6 @@ void guide_write_xml(ctx_channel_item *chitm, std::string &xml)
 
     fl1 = chitm->playlist[chitm->playlist_index].fullnm;
     dn1 = chitm->playlist[chitm->playlist_index].displaynm;
-    guide_times(fl1, st1, en1);
 
     if ((chitm->playlist_index+1) > chitm->playlist_count) {
         fl2 = chitm->playlist[0].fullnm;
@@ -88,7 +109,7 @@ void guide_write_xml(ctx_channel_item *chitm, std::string &xml)
         fl2 = chitm->playlist[chitm->playlist_index].fullnm;
         dn2 = chitm->playlist[chitm->playlist_index].displaynm;
     }
-    guide_times(fl2, st2, en2);
+    guide_times(fl1, st1, en1, fl2, st2, en2);
 
     gnm = "channel"+chitm->ch_nbr;
 
