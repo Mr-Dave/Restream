@@ -102,12 +102,12 @@ void guide_write_xml(ctx_channel_item *chitm, std::string &xml)
     fl1 = chitm->playlist[chitm->playlist_index].fullnm;
     dn1 = chitm->playlist[chitm->playlist_index].displaynm;
 
-    if ((chitm->playlist_index+1) > chitm->playlist_count) {
+    if ((chitm->playlist_index+1) >= chitm->playlist_count) {
         fl2 = chitm->playlist[0].fullnm;
         dn2 = chitm->playlist[0].displaynm;
     } else {
-        fl2 = chitm->playlist[chitm->playlist_index].fullnm;
-        dn2 = chitm->playlist[chitm->playlist_index].displaynm;
+        fl2 = chitm->playlist[chitm->playlist_index+1].fullnm;
+        dn2 = chitm->playlist[chitm->playlist_index+1].displaynm;
     }
     guide_times(fl1, st1, en1, fl2, st2, en2);
 
