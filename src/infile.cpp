@@ -126,7 +126,7 @@ static int decoder_init_audio(ctx_channel_item *chitm)
     }
 
     chitm->ifile.audio.codec_ctx = codec_ctx;
-    
+
     return 0;
 
 }
@@ -396,8 +396,8 @@ static int encode_buffer_audio(ctx_channel_item *chitm)
             , chitm->ch_nbr.c_str());
         return -1;
     }
-    pts = chitm->frame->pts + 50;
-    dts = chitm->frame->pkt_dts+ 50;
+    pts = chitm->frame->pts;
+    dts = chitm->frame->pkt_dts;
 
     myframe_free(chitm->frame);
     chitm->frame = nullptr;
@@ -870,7 +870,7 @@ static int encoder_init_video_mpeg(ctx_channel_item *chitm)
     enc_ctx->time_base.den = enc_ctx->framerate.num;
     enc_ctx->bit_rate = 6000000;
     enc_ctx->sw_pix_fmt = AV_PIX_FMT_YUV420P;
-    enc_ctx->global_quality = 150;    
+    enc_ctx->global_quality = 150;
     enc_ctx->flags |= AV_CODEC_FLAG_QSCALE;
     //enc_ctx->global_quality = FF_QP2LAMBDA * qscale;
 
