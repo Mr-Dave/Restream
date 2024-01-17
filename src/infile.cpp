@@ -375,13 +375,15 @@ static void decoder_receive(ctx_channel_item *chitm)
 
 static int encode_buffer_audio(ctx_channel_item *chitm)
 {
-    int frame_size, retcd;
-    int64_t  pts, dts;
+    int frame_size, retcd, bufspc;
+    int frmsz_src, frmsz_dst;
+    int64_t  pts, dts, ptsadj, dtsadj;
     char errstr[128];
 
-    retcd = av_audio_fifo_realloc(chitm->fifo
-        , chitm->ifile.audio.codec_ctx->frame_size +
-          chitm->ofile.audio.codec_ctx->frame_size);
+    frmsz_src = chitm->ifile.audio.codec_ctx->frame_size;
+    frmsz_dst = chitm->ofile.audio.codec_ctx->frame_size;
+
+    retcd = av_audio_fifo_realloc(chitm->fifo, frmsz_src+frmsz_dst);
     if (retcd < 0) {
         LOG_MSG(NTC, NO_ERRNO, "%s: Could not allocate FIFO"
             , chitm->ch_nbr.c_str());
@@ -389,9 +391,8 @@ static int encode_buffer_audio(ctx_channel_item *chitm)
     }
 
     retcd = av_audio_fifo_write(
-        chitm->fifo, (void **)chitm->frame->data
-        , chitm->ifile.audio.codec_ctx->frame_size);
-    if (retcd < chitm->ifile.audio.codec_ctx->frame_size) {
+        chitm->fifo, (void **)chitm->frame->data,frmsz_src);
+    if (retcd < frmsz_src) {
         LOG_MSG(NTC, NO_ERRNO, "%s: Could not write data to FIFO"
             , chitm->ch_nbr.c_str());
         return -1;
@@ -403,13 +404,20 @@ static int encode_buffer_audio(ctx_channel_item *chitm)
     chitm->frame = nullptr;
 
     retcd = av_audio_fifo_size(chitm->fifo);
-    if (retcd < chitm->ofile.audio.codec_ctx->frame_size) {
+    if (retcd < frmsz_dst) {
+        chitm->audio_last_pts = pts;
+        chitm->audio_last_dts = dts;
         return -1;
     }
 
-    frame_size = FFMIN(
-        av_audio_fifo_size(chitm->fifo)
-        , chitm->ofile.audio.codec_ctx->frame_size);
+    frame_size = FFMIN(av_audio_fifo_size(chitm->fifo), frmsz_dst);
+
+    bufspc = av_audio_fifo_space(chitm->fifo) - frmsz_dst;
+    ptsadj =((float)((pts - chitm->audio_last_pts) / frmsz_src) * bufspc);
+    dtsadj =((float)((dts - chitm->audio_last_dts) / frmsz_src) * bufspc);
+
+    chitm->audio_last_pts = pts;
+    chitm->audio_last_dts = dts;
 
     chitm->frame = av_frame_alloc();
     if (chitm->frame == nullptr) {
@@ -422,8 +430,8 @@ static int encode_buffer_audio(ctx_channel_item *chitm)
         , &chitm->ofile.audio.codec_ctx->ch_layout);
     chitm->frame->format         = chitm->ofile.audio.codec_ctx->sample_fmt;
     chitm->frame->sample_rate    = chitm->ofile.audio.codec_ctx->sample_rate;
-    chitm->frame->pts = pts;
-    chitm->frame->pkt_dts = dts;
+    chitm->frame->pts = pts - ptsadj;
+    chitm->frame->pkt_dts = dts-dtsadj;
 
     retcd = av_frame_get_buffer(chitm->frame, 0);
     if (retcd < 0) {

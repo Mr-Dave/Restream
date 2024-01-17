@@ -153,6 +153,8 @@
         AVPacket        *pkt_in;
         AVFrame         *frame;
         AVAudioFifo     *fifo;
+        int64_t         audio_last_pts;
+        int64_t         audio_last_dts;
 
         int cnct_cnt;
 
