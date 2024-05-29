@@ -24,10 +24,8 @@
 #include "webu_mpegts.hpp"
 #include "infile.hpp"
 
-
 void webu_mpegts_free_context(ctx_webui *webui)
 {
-
     if (webui->wfile.audio.codec_ctx != nullptr) {
         myavcodec_close(webui->wfile.audio.codec_ctx);
         webui->wfile.audio.codec_ctx = nullptr;
@@ -51,7 +49,9 @@ void webu_mpegts_free_context(ctx_webui *webui)
         webui->wfile.video.strm = nullptr;
         webui->wfile.fmt_ctx = nullptr;
     }
-    LOG_MSG(DBG, NO_ERRNO, "closed");
+
+    LOG_MSG(DBG, NO_ERRNO, "Ch%s: Completed"
+        , webui->chitm->ch_nbr.c_str());
 }
 
 static void webu_mpegts_resetpos(ctx_webui *webui)
@@ -65,7 +65,7 @@ static void webu_mpegts_packet_wait(ctx_webui *webui)
     int64_t tm_diff, pts_diff, tot_diff;
     int64_t sec_full, sec_msec;
 
-    if (finish == true) {
+    if (webui->app->webcontrol_finish == true) {
         return;
     }
 
@@ -320,7 +320,7 @@ static void webu_mpegts_packet_write(ctx_webui *webui)
     int retcd;
     char errstr[128];
 
-    if (finish == true) {
+    if (webui->app->webcontrol_finish == true) {
         return;
     }
 
@@ -352,7 +352,7 @@ static void webu_mpegts_packet_write(ctx_webui *webui)
     }
 
     webu_mpegts_packet_wait(webui);
-/*    
+/*
     LOG_MSG(NTC, NO_ERRNO
         ,"%s: Writing frame index %d id %d"
         , webui->chitm->ch_nbr.c_str()
@@ -394,8 +394,6 @@ static void webu_mpegts_pkt_copy(ctx_webui *webui, int indx)
     webui->pkt_timebase  = webui->chitm->pktarray[indx].timebase;
     webui->pkt_file_cnt  = webui->chitm->pktarray[indx].file_cnt;
     webui->pkt_key       = webui->chitm->pktarray[indx].iskey;
-
-    return;
 }
 
 static bool webu_mpegts_pkt_get(ctx_webui *webui, int indx)
@@ -438,7 +436,11 @@ static void webu_mpegts_getimg(ctx_webui *webui)
     pktready = webu_mpegts_pkt_get(webui, indx_next);
 
     chk = 0;
-    while ((chk < 1000000) && (pktready == false) && (finish == false)) {
+    while (
+        (chk < 1000000) &&
+        (pktready == false) &&
+        (webui->app->webcontrol_finish == false)) {
+
         SLEEP(0, webui->msec_cnt * 1000);
         pktready = webu_mpegts_pkt_get(webui, indx_next);
         chk++;
@@ -476,7 +478,7 @@ static ssize_t webu_mpegts_response(void *cls, uint64_t pos, char *buf, size_t m
     size_t sent_bytes;
     (void)pos;
 
-    if ((webui->app->webcontrol_finish) || (webui->chitm->ch_finish)) {
+    if (webui->app->webcontrol_finish == true) {
         return -1;
     }
 
@@ -519,10 +521,11 @@ static int webu_mpegts_streams_video_h264(ctx_webui *webui)
     webui->wfile.fmt_ctx->video_codec = avcodec_find_encoder(AV_CODEC_ID_H264);
     encoder = webui->wfile.fmt_ctx->video_codec;
 
-    webui->wfile.video.strm = avformat_new_stream(webui->wfile.fmt_ctx
-        , encoder);
+    webui->wfile.video.strm = avformat_new_stream(
+        webui->wfile.fmt_ctx, encoder);
     if (webui->wfile.video.strm == nullptr) {
         LOG_MSG(ERR, NO_ERRNO, "Could not alloc video stream");
+        webu_mpegts_free_context(webui);
         return -1;
     }
     webui->wfile.video.index = webui->wfile.video.strm->index;
@@ -533,6 +536,7 @@ static int webu_mpegts_streams_video_h264(ctx_webui *webui)
         LOG_MSG(NTC, NO_ERRNO
             , "%s: Could not allocate video context"
             , webui->chitm->ch_nbr.c_str());
+        webu_mpegts_free_context(webui);
         return -1;
     }
 
@@ -567,6 +571,7 @@ static int webu_mpegts_streams_video_h264(ctx_webui *webui)
         av_strerror(retcd, errstr, sizeof(errstr));
         LOG_MSG(ERR, NO_ERRNO,"Failed to open codec: %s", errstr);
         av_dict_free(&opts);
+        webu_mpegts_free_context(webui);
         return -1;
     }
     av_dict_free(&opts);
@@ -576,6 +581,7 @@ static int webu_mpegts_streams_video_h264(ctx_webui *webui)
         av_strerror(retcd, errstr, sizeof(errstr));
         LOG_MSG(ERR, NO_ERRNO
             ,"Failed to copy decoder parameters!: %s", errstr);
+        webu_mpegts_free_context(webui);
         return -1;
     }
     stream->time_base = webui->chitm->ofile.video.strm->time_base;
@@ -601,6 +607,7 @@ static int webu_mpegts_streams_video_mpeg(ctx_webui *webui)
     webui->wfile.video.strm = avformat_new_stream(webui->wfile.fmt_ctx, encoder);
     if (webui->wfile.video.strm == nullptr) {
         LOG_MSG(ERR, NO_ERRNO, "Could not alloc video stream");
+        webu_mpegts_free_context(webui);
         return -1;
     }
     webui->wfile.video.index = webui->wfile.video.strm->index;
@@ -611,6 +618,7 @@ static int webu_mpegts_streams_video_mpeg(ctx_webui *webui)
         LOG_MSG(NTC, NO_ERRNO
             , "%s: Could not allocate video context"
             , webui->chitm->ch_nbr.c_str());
+        webu_mpegts_free_context(webui);
         return -1;
     }
 
@@ -642,6 +650,7 @@ static int webu_mpegts_streams_video_mpeg(ctx_webui *webui)
             , wfl_ctx->pix_fmt, wfl_ctx->time_base.den
             , wfl_ctx->framerate.num, wfl_ctx->framerate.den);
         av_dict_free(&opts);
+        webu_mpegts_free_context(webui);
         abort();
         return -1;
     }
@@ -652,6 +661,7 @@ static int webu_mpegts_streams_video_mpeg(ctx_webui *webui)
         av_strerror(retcd, errstr, sizeof(errstr));
         LOG_MSG(ERR, NO_ERRNO
             ,"Failed to copy decoder parameters!: %s", errstr);
+        webu_mpegts_free_context(webui);
         return -1;
     }
     stream->time_base = webui->chitm->ofile.video.strm->time_base;
@@ -687,6 +697,7 @@ static int webu_mpegts_streams_audio(ctx_webui *webui)
     webui->wfile.audio.strm = avformat_new_stream(webui->wfile.fmt_ctx, encoder);
     if (webui->wfile.audio.strm == nullptr) {
         LOG_MSG(ERR, NO_ERRNO, "Could not alloc audio stream");
+        webu_mpegts_free_context(webui);
         return -1;
     }
     stream = webui->wfile.audio.strm;
@@ -697,6 +708,7 @@ static int webu_mpegts_streams_audio(ctx_webui *webui)
         LOG_MSG(NTC, NO_ERRNO
             , "%s: Could not allocate audio context"
             , webui->chitm->ch_nbr.c_str());
+        webu_mpegts_free_context(webui);
         return -1;
     }
 
@@ -729,6 +741,7 @@ static int webu_mpegts_streams_audio(ctx_webui *webui)
     if (retcd < 0) {
         av_strerror(retcd, errstr, sizeof(errstr));
         LOG_MSG(ERR, NO_ERRNO,"Failed to open codec: %s", errstr);
+        webu_mpegts_free_context(webui);
         abort();
         return -1;
     }
@@ -737,12 +750,16 @@ static int webu_mpegts_streams_audio(ctx_webui *webui)
     return 0;
 }
 
-void webu_mpegts_open(ctx_webui *webui)
+static int webu_mpegts_open(ctx_webui *webui)
 {
     int retcd, indx_curr;
     char errstr[128];
     unsigned char   *buf_image;
     AVDictionary    *opts;
+
+    if (webui->app->webcontrol_finish == true) {
+        return -1;
+    }
 
     opts = NULL;
     webui->wfile.fmt_ctx = avformat_alloc_context();
@@ -757,14 +774,16 @@ void webu_mpegts_open(ctx_webui *webui)
             }
             if (retcd < 0) {
                 pthread_mutex_unlock(&webui->chitm->mtx_ifmt);
-                return;
+                webu_mpegts_free_context(webui);
+                return -1;
             }
         }
         if (webui->chitm->ofile.audio.index != -1) {
             retcd = webu_mpegts_streams_audio(webui);
             if (retcd < 0) {
                 pthread_mutex_unlock(&webui->chitm->mtx_ifmt);
-                return;
+                webu_mpegts_free_context(webui);
+                return -1;
             }
         }
     pthread_mutex_unlock(&webui->chitm->mtx_ifmt);
@@ -789,7 +808,7 @@ void webu_mpegts_open(ctx_webui *webui)
             ,"Failed to write header!: %s", errstr);
         webu_mpegts_free_context(webui);
         av_dict_free(&opts);
-        return;
+        return -1;
     }
     av_dict_free(&opts);
 
@@ -813,7 +832,7 @@ void webu_mpegts_open(ctx_webui *webui)
         , webui->chitm->ch_nbr.c_str()
         , webui->pkt_index, indx_curr);
 
-
+    return 0;
 }
 
 mhdrslt webu_mpegts_main(ctx_webui *webui)
@@ -822,7 +841,13 @@ mhdrslt webu_mpegts_main(ctx_webui *webui)
     struct MHD_Response *response;
     std::list<ctx_params_item>::iterator    it;
 
-    webu_mpegts_open(webui);
+    if (webui->app->webcontrol_finish == true) {
+        return MHD_NO;
+    }
+
+    if (webu_mpegts_open(webui) == -1) {
+        return MHD_NO;
+    }
 
     clock_gettime(CLOCK_MONOTONIC, &webui->time_last);
 
@@ -862,18 +887,17 @@ static void webu_stream_cnct_cnt(ctx_webui *webui)
         webui->chitm->cnct_cnt++;
         webui->chitm->pktarray_start = webui->chitm->pktarray_count;
         chk = 0;
-        while ((webui->chitm->pktarray_start >0) && (chk <100000)) {
+        while ((webui->chitm->pktarray_start > 0) && (chk <100000)) {
             SLEEP(0,10000L);
             chk++;
-        }        
+        }
     } else {
         webui->chitm->cnct_cnt++;
     }
-
 }
 
 /* Assign the type of stream that is being answered*/
-static void webu_stream_type(ctx_webui *webui)
+static int webu_stream_type(ctx_webui *webui)
 {
     if (webui->uri_cmd1 == "mpegts") {
         if (webui->uri_cmd2 == "stream") {
@@ -882,8 +906,13 @@ static void webu_stream_type(ctx_webui *webui)
             webui->cnct_type = WEBUI_CNCT_TS_FULL;
         } else {
             webui->cnct_type = WEBUI_CNCT_UNKNOWN;
+            return -1;
         }
+    } else {
+        webui->cnct_type = WEBUI_CNCT_UNKNOWN;
+        return -1;
     }
+    return 0;
 }
 
 /* Determine whether the user specified a valid URL for the particular port */
@@ -898,12 +927,11 @@ static int webu_stream_checks(ctx_webui *webui)
         LOG_MSG(ERR, NO_ERRNO
             , "Invalid channel specified: %s",webui->url.c_str());
             return -1;
-        }
+    }
 
-        if ((webui->app->webcontrol_finish) ||
-            (webui->chitm->ch_finish)) {
-            return -1;
-        }
+    if (webui->app->webcontrol_finish == true) {
+        return -1;
+    }
 
     return 0;
 }
@@ -917,7 +945,9 @@ mhdrslt webu_stream_main(ctx_webui *webui)
         return MHD_NO;
     }
 
-    webu_stream_type(webui);
+    if (webu_stream_type(webui) == -1) {
+        return MHD_NO;
+    }
 
     if (webu_stream_checks(webui) == -1) {
         return MHD_NO;

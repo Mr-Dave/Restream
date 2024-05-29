@@ -43,10 +43,6 @@ void guide_times(
     struct tm       *time_info;
     char            timebuf[1024];
 
-    if (finish == true) {
-        return;
-    }
-
     dur_time = 0;
 
     time(&timenow);
@@ -148,7 +144,7 @@ void guide_write(ctx_channel_item *chitm)
     int fd, rc;
     std::string xml;
 
-    if (finish == true) {
+    if (chitm->ch_finish == true) {
         return;
     }
 
@@ -186,7 +182,7 @@ void guide_process(ctx_channel_item *chitm)
     int retcd;
     std::string xml;
 
-    if (finish == true) {
+    if (chitm->ch_finish == true) {
         return;
     }
 

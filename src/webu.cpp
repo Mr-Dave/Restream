@@ -670,8 +670,7 @@ static mhdrslt webu_answer_get(ctx_webui *webui)
     LOG_MSG(DBG, NO_ERRNO ,"processing get");
 
     retcd = MHD_NO;
-    if ((webui->uri_cmd1 == "mpegts")) {
-
+    if (webui->uri_cmd1 == "mpegts") {
         retcd = webu_stream_main(webui);
         if (retcd == MHD_NO) {
             webu_html_badreq(webui);
@@ -722,7 +721,7 @@ static mhdrslt webu_answer(void *cls, struct MHD_Connection *connection, const c
         return retcd;
     }
 
-    if (finish) {
+    if (webui->app->webcontrol_finish) {
         LOG_MSG(NTC, NO_ERRNO ,"Shutting down channels");
         return MHD_NO;
     }
@@ -811,23 +810,20 @@ static void webu_mhd_deinit(void *cls, struct MHD_Connection *connection
      * before the connection counter has been incremented.  So we check the
      * connection counter before we decrement
      */
-    if (webui->cnct_type == WEBUI_CNCT_TS_FULL ) {
-            if (webui->chitm->cnct_cnt > 0) {
-                webui->chitm->cnct_cnt--;
-            }
+    if (webui->cnct_type == WEBUI_CNCT_TS_FULL) {
+        if (webui->chitm->cnct_cnt > 0) {
+            webui->chitm->cnct_cnt--;
+        }
     }
 
     if (webui != NULL) {
-        LOG_MSG(INF, NO_ERRNO ,"Closing connection");
-        if ((webui->cnct_type == WEBUI_CNCT_TS_FULL)) {
-            if ((webui->chitm->cnct_cnt == 0)) {
-                webu_mpegts_free_context(webui);
-            }
+        LOG_MSG(INF, NO_ERRNO ,"Ch%s: Closing connection"
+            , webui->chitm->ch_nbr.c_str());
+        if (webui->cnct_type == WEBUI_CNCT_TS_FULL) {
+            webu_mpegts_free_context(webui);
         }
         webu_context_free(webui);
     }
-
-    return;
 }
 
 /* Validate that the MHD version installed can process basic authentication */
@@ -1163,42 +1159,25 @@ static void webu_init_webcontrol(ctx_app *app)
             ,"Started webcontrol on port %d"
             ,app->conf->webcontrol_port);
     }
-
-    return;
 }
 
 /* Shut down the webcontrol */
 void webu_deinit(ctx_app *app)
 {
-
     if (app->webcontrol_daemon != NULL) {
+        LOG_MSG(DBG, NO_ERRNO,"Closing");
         app->webcontrol_finish = true;
         MHD_stop_daemon (app->webcontrol_daemon);
     }
-
 }
 
 /* Start the webcontrol and streams */
 void webu_init(ctx_app *app)
 {
-    struct sigaction act;
-
-    /* We need to block some signals otherwise MHD will not function correctly. */
-    /* set signal handlers TO IGNORE */
-    memset(&act, 0, sizeof(act));
-    sigemptyset(&act.sa_mask);
-    act.sa_handler = SIG_IGN;
-    sigaction(SIGPIPE, &act, NULL);
-    sigaction(SIGCHLD, &act, NULL);
-
     app->webcontrol_daemon = NULL;
     app->webcontrol_finish = false;
 
-     /* Start the webcontrol */
     if (app->conf->webcontrol_port != 0 ) {
         webu_init_webcontrol(app);
     }
-
-    return;
-
 }

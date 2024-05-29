@@ -92,12 +92,13 @@ void playlist_loaddir(ctx_channel_item *chitm)
     struct dirent *dir;
     ctx_playlist_item playitm;
 
-    if (finish == true) {
+    chitm->playlist_count = 0;
+    chitm->playlist.clear();
+
+    if (chitm->ch_finish == true) {
         return;
     }
 
-    chitm->playlist_count = 0;
-    chitm->playlist.clear();
     d = opendir(chitm->ch_dir.c_str());
     if (d) {
         while ((dir=readdir(d)) != NULL){
@@ -129,7 +130,7 @@ void channel_process_setup(ctx_channel_item *chitm)
     chitm->ch_dir = "";
     chitm->ch_nbr = "";
     chitm->ch_sort = "";
-    chitm->ch_running = false;
+    chitm->ch_running = true;
     chitm->ch_tvhguide = true;
     chitm->ch_encode = "";
     chitm->frame = nullptr;
@@ -146,7 +147,7 @@ void channel_process_setup(ctx_channel_item *chitm)
 
     util_parms_parse(
         chitm->ch_params
-        , "ch"+std::to_string(chitm->ch_index)
+        , "Ch"+std::to_string(chitm->ch_index)
         , chitm->ch_conf);
 
     for (it  = chitm->ch_params.params_array.begin();
@@ -190,7 +191,7 @@ void channel_process(ctx_app *app, int chindx)
     ctx_channel_item *chitm = &app->channels[chindx];
     int indx;
 
-    chitm->ch_running = true;
+    LOG_MSG(NTC, NO_ERRNO, "Starting channel %s",chitm->ch_nbr.c_str());
 
     channel_process_setup(chitm);
 
@@ -227,6 +228,8 @@ void channel_process(ctx_app *app, int chindx)
         }
     }
 
+    streams_close(chitm);
+
     for (indx=0; indx < (int)chitm->pktarray.size(); indx++) {
         if (chitm->pktarray[indx].packet != nullptr) {
             mypacket_free(chitm->pktarray[indx].packet);
@@ -241,6 +244,8 @@ void channel_process(ctx_app *app, int chindx)
     pthread_mutex_destroy(&chitm->mtx_pktarray);
 
     chitm->ch_running = false;
+    LOG_MSG(NTC, NO_ERRNO, "Finished channel %s",chitm->ch_nbr.c_str());
+
 }
 
 void channels_init(ctx_app *app)
@@ -272,27 +277,57 @@ void channels_init(ctx_app *app)
 
 void channels_wait(ctx_app *app)
 {
-    int chcnt, indx, chk;
+    int ch_count, indx, chk;
 
-    chcnt = 1;
+    ch_count = app->ch_count;
     chk = 0;
-    while (chcnt != 0){
+    while (ch_count != 0){
         sleep(1);
         if (finish) {
-            chk++;
+            LOG_MSG(NTC, NO_ERRNO,"Closing web interface connections");
+            app->webcontrol_finish = true;
+            chk = 0;
+            ch_count = 1;
+            while ((chk < 5) && (ch_count > 0)) {
+                ch_count = 0;
+                for (indx=0; indx < app->ch_count; indx++) {
+                    ch_count += app->channels[indx].cnct_cnt;
+                }
+                if (ch_count > 0) {
+                    sleep(1);
+                }
+                chk++;
+            }
+            if (chk >= 5) {
+                LOG_MSG(NTC, NO_ERRNO,"Excessive wait for webcontrol shutdown");
+            } else {
+                LOG_MSG(NTC, NO_ERRNO,"Web connections closed. Waited %d", chk);
+            }
+
+            LOG_MSG(NTC, NO_ERRNO,"Closing channels");
             for (indx=0; indx < app->ch_count; indx++) {
                 app->channels[indx].ch_finish = true;
             }
-            sleep(1);
-            chcnt = 0;
-            for (indx=0; indx < app->ch_count; indx++) {
-                if (app->channels[indx].ch_running == true) {
-                    chcnt++;
+
+            chk = 0;
+            ch_count = 1;
+            while ((chk < 5) && (ch_count > 0)) {
+                ch_count = 0;
+                for (indx=0; indx < app->ch_count; indx++) {
+                    if (app->channels[indx].ch_running == true) {
+                        ch_count++;
+                    }
                 }
+                if (ch_count > 0) {
+                    sleep(1);
+                }
+                chk++;
             }
-            if (chk >5) {
+            if (chk >= 5) {
                 LOG_MSG(NTC, NO_ERRNO,"Excessive wait for shutdown");
-                chcnt =0;
+                ch_count =0;
+            } else {
+                LOG_MSG(NTC, NO_ERRNO,"Channels closed. Waited %d", chk);
             }
         }
     }
@@ -309,7 +344,7 @@ void logger(void *var1, int errnbr, const char *fmt, va_list vlist)
     buff[strlen(buff)-1] = 0;
 
     if (strstr(buff, "forced frame type") != nullptr) {
-        return;        
+        return;
     }
 
     if (errnbr < AV_LOG_VERBOSE) {
