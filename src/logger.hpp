@@ -44,8 +44,8 @@
 
     void log_msg(int loglvl, int flgerr, bool flgfnc, const char *fmt, ...);
 
-    void log_init(ctx_app *app);
-    void log_deinit(ctx_app *app);
+    void log_init(cls_app *app);
+    void log_deinit(cls_app *app);
     void log_set_level(int new_level);
 
 #endif /* _INCLUDE_LOGGER_HPP_ */

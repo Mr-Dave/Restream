@@ -179,7 +179,7 @@ void log_msg(int loglvl, int flgerr, bool flgfnc, const char *fmt, ...)
 
 }
 
-void log_init(ctx_app *app)
+void log_init(cls_app *app)
 {
     if ((app->conf->log_level > ALL) ||
         (app->conf->log_level == 0)) {
@@ -216,7 +216,7 @@ void log_init(ctx_app *app)
     log_level = app->conf->log_level;
 }
 
-void log_deinit(ctx_app *app)
+void log_deinit(cls_app *app)
 {
     if (logfile != NULL) {
         LOG_MSG(NTC, NO_ERRNO

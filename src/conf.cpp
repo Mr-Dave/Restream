@@ -568,7 +568,7 @@ static void usage(void)
 }
 
 /** Process Command-line options specified */
-static void conf_cmdline(ctx_app *app)
+static void conf_cmdline(cls_app *app)
 {
     int c;
 
@@ -594,7 +594,7 @@ static void conf_cmdline(ctx_app *app)
 }
 
 /** Process each line from the config file. */
-void conf_process(ctx_app *app)
+void conf_process(cls_app *app)
 {
     size_t stpos;
     std::string line, parm_nm, parm_vl;
@@ -646,7 +646,7 @@ void conf_process(ctx_app *app)
 }
 
 /**  Write the configuration(s) to the log */
-void conf_parms_log(ctx_app *app)
+void conf_parms_log(cls_app *app)
 {
     int i;
     std::string parm_vl, parm_main, parm_nm;
@@ -702,7 +702,7 @@ void conf_parms_write_parms(FILE *conffile, std::string parm_nm
 }
 
 /**  Write the configuration(s) to file */
-void conf_parms_write(ctx_app *app)
+void conf_parms_write(cls_app *app)
 {
     int i;
     std::string parm_vl, parm_main, parm_nm;
@@ -755,7 +755,7 @@ void conf_parms_write(ctx_app *app)
         , app->conf_file.c_str());
 }
 
-void conf_init(ctx_app *app)
+void conf_init(cls_app *app)
 {
     std::string filename;
     char path[PATH_MAX];

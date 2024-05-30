@@ -71,9 +71,9 @@
 
     extern struct ctx_parm config_parms[];
 
-    void conf_init(ctx_app *app);
-    void conf_parms_log(ctx_app *app);
-    void conf_parms_write(ctx_app *app);
+    void conf_init(cls_app *app);
+    void conf_parms_log(cls_app *app);
+    void conf_parms_write(cls_app *app);
 
     void conf_edit_set(ctx_config *conf, std::string parm_nm
         , std::string parm_val);

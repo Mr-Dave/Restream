@@ -56,7 +56,7 @@
     #include <mutex>
 
     struct ctx_config;
-    struct ctx_app;
+    class cls_app;
 
     extern bool finish;
 
@@ -130,7 +130,7 @@
     };
 
     struct ctx_channel_item {
-        ctx_app         *app;
+        cls_app         *app;
         ctx_params      ch_params;
         std::string     ch_conf;
         std::string     ch_dir;
@@ -169,21 +169,25 @@
 
     };
 
-    struct ctx_app {
-        int         argc;
-        char        **argv;
-        std::string conf_file;
-        ctx_config  *conf;
+    class cls_app {
+        public:
+            cls_app(int argc, char **argv);
+            ~cls_app();
+            ctx_config  *conf;
+            int     argc;
+            char    **argv;
+            std::string conf_file;
+            std::vector<ctx_channel_item>    channels;
+            int         ch_count;
+            int         webcontrol_running;
+            int         webcontrol_finish;
+            ctx_params  webcontrol_headers;
+            char        webcontrol_digest_rand[12];
+            struct MHD_Daemon               *webcontrol_daemon;
+            std::list<ctx_webu_clients>      webcontrol_clients;         /* list of client ips */
+        private:
 
-        std::vector<ctx_channel_item>    channels;
-        int         ch_count;
 
-        int         webcontrol_running;
-        int         webcontrol_finish;
-        ctx_params  webcontrol_headers;        /* parameters for header */
-        char        webcontrol_digest_rand[12];
-        struct MHD_Daemon               *webcontrol_daemon;
-        std::list<ctx_webu_clients>      webcontrol_clients;         /* list of client ips */
     };
 
 #endif

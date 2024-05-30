@@ -186,12 +186,12 @@ void channel_process_defaults(ctx_channel_item *chitm)
     chitm->pktarray_start = 0;
 }
 
-void channel_process(ctx_app *app, int chindx)
+void channel_process(cls_app *app, int chindx)
 {
     ctx_channel_item *chitm = &app->channels[chindx];
     int indx;
 
-    LOG_MSG(NTC, NO_ERRNO, "Starting channel %s",chitm->ch_nbr.c_str());
+    LOG_MSG(NTC, NO_ERRNO, "Ch%s: Starting",chitm->ch_nbr.c_str());
 
     channel_process_setup(chitm);
 
@@ -201,7 +201,8 @@ void channel_process(ctx_app *app, int chindx)
         playlist_loaddir(chitm);
         for (indx=0; indx < chitm->playlist_count; indx++) {
             LOG_MSG(NTC, NO_ERRNO
-                , "Playing: %s"
+                , "Ch%s: Playing: %s"
+                , chitm->ch_nbr.c_str()
                 , chitm->playlist[indx].filenm.c_str());
             chitm->playlist_index = indx;
             if (chitm->ch_tvhguide == true) {
@@ -244,11 +245,10 @@ void channel_process(ctx_app *app, int chindx)
     pthread_mutex_destroy(&chitm->mtx_pktarray);
 
     chitm->ch_running = false;
-    LOG_MSG(NTC, NO_ERRNO, "Finished channel %s",chitm->ch_nbr.c_str());
-
+    LOG_MSG(NTC, NO_ERRNO, "Ch%s: Finished",chitm->ch_nbr.c_str());
 }
 
-void channels_init(ctx_app *app)
+void channels_init(cls_app *app)
 {
     int indx;
     ctx_channel_item chitm;
@@ -275,7 +275,7 @@ void channels_init(ctx_app *app)
 
 }
 
-void channels_wait(ctx_app *app)
+void channels_wait(cls_app *app)
 {
     int ch_count, indx, chk;
 
@@ -364,14 +364,11 @@ void logger(void *var1, int errnbr, const char *fmt, va_list vlist)
 
 int main(int argc, char **argv){
 
-    ctx_app *app;
+    cls_app *app;
 
     finish = false;
 
-    app = new ctx_app;
-    app->argc = argc;
-    app->argv = argv;
-    app->conf = new ctx_config;
+    app = new cls_app(argc, argv);
 
     mythreadname_set(nullptr,1,"main");
 
@@ -390,8 +387,21 @@ int main(int argc, char **argv){
 
     webu_deinit(app);
 
-    delete app->conf;
     delete app;
 
     return 0;
+}
+
+cls_app::cls_app(int p_argc, char **p_argv)
+{
+    argc = p_argc;
+    argv = p_argv;
+    conf = new ctx_config;
+
+}
+
+cls_app::~cls_app()
+{
+    delete conf;
+
 }

@@ -43,7 +43,7 @@ void webu_html_badreq(ctx_webui *webui)
 
 /* Context to pass the parms to functions to start mhd */
 struct ctx_mhdstart {
-    ctx_app              *app;
+    cls_app              *app;
     std::string             tls_cert;
     std::string             tls_key;
     bool                    tls_use;
@@ -56,7 +56,7 @@ struct ctx_mhdstart {
 };
 
 /* Set defaults for the webui context */
-static void webu_context_init(ctx_app *app, ctx_webui *webui)
+static void webu_context_init(cls_app *app, ctx_webui *webui)
 {
     webui->url           = "";
     webui->uri_chid     = "";
@@ -767,7 +767,7 @@ static mhdrslt webu_answer(void *cls, struct MHD_Connection *connection, const c
 /* Initialize the MHD answer */
 static void *webu_mhd_init(void *cls, const char *uri, struct MHD_Connection *connection)
 {
-    ctx_app *app = (ctx_app *)cls;
+    cls_app *app = (cls_app *)cls;
     ctx_webui *webui;
     int retcd;
 
@@ -817,9 +817,9 @@ static void webu_mhd_deinit(void *cls, struct MHD_Connection *connection
     }
 
     if (webui != NULL) {
-        LOG_MSG(INF, NO_ERRNO ,"Ch%s: Closing connection"
-            , webui->chitm->ch_nbr.c_str());
         if (webui->cnct_type == WEBUI_CNCT_TS_FULL) {
+            LOG_MSG(INF, NO_ERRNO ,"Ch%s: Closing connection"
+                , webui->chitm->ch_nbr.c_str());
             webu_mpegts_free_context(webui);
         }
         webu_context_free(webui);
@@ -1113,7 +1113,7 @@ static void webu_mhd_flags(ctx_mhdstart *mhdst)
 }
 
 /* Start the webcontrol */
-static void webu_init_webcontrol(ctx_app *app)
+static void webu_init_webcontrol(cls_app *app)
 {
     ctx_mhdstart mhdst;
     unsigned int randnbr;
@@ -1162,7 +1162,7 @@ static void webu_init_webcontrol(ctx_app *app)
 }
 
 /* Shut down the webcontrol */
-void webu_deinit(ctx_app *app)
+void webu_deinit(cls_app *app)
 {
     if (app->webcontrol_daemon != NULL) {
         LOG_MSG(DBG, NO_ERRNO,"Closing");
@@ -1172,7 +1172,7 @@ void webu_deinit(ctx_app *app)
 }
 
 /* Start the webcontrol and streams */
-void webu_init(ctx_app *app)
+void webu_init(cls_app *app)
 {
     app->webcontrol_daemon = NULL;
     app->webcontrol_finish = false;
