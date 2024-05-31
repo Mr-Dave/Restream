@@ -55,10 +55,10 @@
     #include <algorithm>
     #include <mutex>
 
-    struct ctx_config;
+    class cls_config;
     class cls_app;
 
-    extern bool finish;
+    extern cls_app *app;
 
     #define MYFFVER (LIBAVFORMAT_VERSION_MAJOR * 1000)+LIBAVFORMAT_VERSION_MINOR
 
@@ -76,17 +76,45 @@
         WEBUI_LEVEL_RESTRICTED = 3,
         WEBUI_LEVEL_NEVER      = 99
     };
+    enum PARM_CAT{
+        PARM_CAT_00
+        ,PARM_CAT_01
+        ,PARM_CAT_02
+        ,PARM_CAT_MAX
+    };
+    enum PARM_TYP{
+        PARM_TYP_STRING
+        , PARM_TYP_INT
+        , PARM_TYP_LIST
+        , PARM_TYP_BOOL
+        , PARM_TYP_ARRAY
+    };
+    enum PARM_ACT{
+        PARM_ACT_DFLT
+        , PARM_ACT_SET
+        , PARM_ACT_GET
+        , PARM_ACT_LIST
+    };
+    struct ctx_config_item {
+        std::string         parm_name;      /* name for this parameter                  */
+        enum PARM_TYP       parm_type;      /* enum of parm_typ for bool,int or string. */
+        enum PARM_CAT       parm_cat;       /* enum of parm_cat for grouping. */
+        enum WEBUI_LEVEL    webui_level;    /* Enum to display in webui: 0,1,2,3,99(always to never)*/
+    };
 
     struct ctx_params_item {
         std::string     param_name;       /* The name or description of the ID as requested by user*/
         std::string     param_value;      /* The value that the user wants the control set to*/
     };
 
+    typedef std::list<ctx_params_item> p_lst;
+    typedef p_lst::iterator p_it;
+
     struct ctx_params {
-        std::list<ctx_params_item> params_array;  /*List of the controls the user specified*/
-        int params_count;               /*Count of the controls the user specified*/
-        bool update_params;             /*Bool for whether to update the parameters on the device*/
-        std::string params_desc;        /* Description of params*/
+        p_lst params_array;         /*List of the controls the user specified*/
+        int params_count;           /*Count of the controls the user specified*/
+        bool update_params;         /*Bool for whether to update the parameters on the device*/
+        std::string params_desc;    /* Description of params*/
     };
 
     struct ctx_webu_clients {
@@ -173,10 +201,17 @@
         public:
             cls_app(int argc, char **argv);
             ~cls_app();
-            ctx_config  *conf;
-            int     argc;
-            char    **argv;
-            std::string conf_file;
+
+            int         argc;
+            char        **argv;
+
+            bool finish;
+
+            cls_config  *conf;
+            std::string     conf_file;
+            std::string     log_file;
+            int             log_level;
+
             std::vector<ctx_channel_item>    channels;
             int         ch_count;
             int         webcontrol_running;
@@ -184,9 +219,9 @@
             ctx_params  webcontrol_headers;
             char        webcontrol_digest_rand[12];
             struct MHD_Daemon               *webcontrol_daemon;
-            std::list<ctx_webu_clients>      webcontrol_clients;         /* list of client ips */
+            std::list<ctx_webu_clients>      webcontrol_clients;
         private:
-
+            void signal_setup();
 
     };
 

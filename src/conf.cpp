@@ -27,42 +27,7 @@
 #include "infile.hpp"
 #include "webu.hpp"
 
-enum PARM_ACT{
-    PARM_ACT_DFLT
-    , PARM_ACT_SET
-    , PARM_ACT_GET
-    , PARM_ACT_LIST
-};
-
-/*Configuration parameters */
-ctx_parm config_parms[] = {
-    {"log_file",                  PARM_TYP_STRING, PARM_CAT_00, WEBUI_LEVEL_ADVANCED },
-    {"log_level",                 PARM_TYP_LIST,   PARM_CAT_00, WEBUI_LEVEL_LIMITED },
-
-    {"webcontrol_port",           PARM_TYP_INT,    PARM_CAT_01, WEBUI_LEVEL_ADVANCED },
-    {"webcontrol_port2",          PARM_TYP_INT,    PARM_CAT_01, WEBUI_LEVEL_ADVANCED },
-    {"webcontrol_base_path",      PARM_TYP_STRING, PARM_CAT_01, WEBUI_LEVEL_ADVANCED },
-    {"webcontrol_ipv6",           PARM_TYP_BOOL,   PARM_CAT_01, WEBUI_LEVEL_ADVANCED },
-    {"webcontrol_localhost",      PARM_TYP_BOOL,   PARM_CAT_01, WEBUI_LEVEL_ADVANCED },
-    {"webcontrol_parms",          PARM_TYP_LIST,   PARM_CAT_01, WEBUI_LEVEL_NEVER},
-    {"webcontrol_interface",      PARM_TYP_LIST,   PARM_CAT_01, WEBUI_LEVEL_ADVANCED },
-    {"webcontrol_auth_method",    PARM_TYP_LIST,   PARM_CAT_01, WEBUI_LEVEL_RESTRICTED },
-    {"webcontrol_authentication", PARM_TYP_STRING, PARM_CAT_01, WEBUI_LEVEL_RESTRICTED },
-    {"webcontrol_tls",            PARM_TYP_BOOL,   PARM_CAT_01, WEBUI_LEVEL_RESTRICTED },
-    {"webcontrol_cert",           PARM_TYP_STRING, PARM_CAT_01, WEBUI_LEVEL_RESTRICTED },
-    {"webcontrol_key",            PARM_TYP_STRING, PARM_CAT_01, WEBUI_LEVEL_RESTRICTED },
-    {"webcontrol_headers",        PARM_TYP_STRING, PARM_CAT_01, WEBUI_LEVEL_ADVANCED },
-    {"webcontrol_html",           PARM_TYP_STRING, PARM_CAT_01, WEBUI_LEVEL_ADVANCED },
-    {"webcontrol_lock_minutes",   PARM_TYP_INT,    PARM_CAT_01, WEBUI_LEVEL_ADVANCED },
-    {"webcontrol_lock_attempts",  PARM_TYP_INT,    PARM_CAT_01, WEBUI_LEVEL_ADVANCED },
-    {"webcontrol_lock_script",    PARM_TYP_STRING, PARM_CAT_01, WEBUI_LEVEL_RESTRICTED },
-
-    {"channel",                   PARM_TYP_ARRAY, PARM_CAT_02, WEBUI_LEVEL_ADVANCED },
-
-    { "", (enum PARM_TYP)0, (enum PARM_CAT)0, (enum WEBUI_LEVEL)0 }
-};
-
-void conf_edit_set_bool(bool &parm_dest, std::string &parm_in)
+void cls_config::parm_set_bool(bool &parm_dest, std::string &parm_in)
 {
     if ((parm_in == "1") || (parm_in == "yes") || (parm_in == "on") || (parm_in == "true") ) {
         parm_dest = true;
@@ -71,7 +36,7 @@ void conf_edit_set_bool(bool &parm_dest, std::string &parm_in)
     }
 }
 
-static void conf_edit_get_bool(std::string &parm_dest, bool &parm_in)
+void cls_config::parm_get_bool(std::string &parm_dest, bool &parm_in)
 {
     if (parm_in == true) {
         parm_dest = "on";
@@ -80,39 +45,39 @@ static void conf_edit_get_bool(std::string &parm_dest, bool &parm_in)
     }
 }
 
-static void conf_edit_log_file(ctx_config *conf, std::string &parm, enum PARM_ACT pact)
+void cls_config::edit_log_file(std::string &parm, enum PARM_ACT pact)
 {
     char    lognm[4096];
     tm      *logtm;
     time_t  logt;
 
     if (pact == PARM_ACT_DFLT) {
-        conf->log_file = "";
+        log_file = "";
     } else if (pact == PARM_ACT_SET) {
         time(&logt);
         logtm = localtime(&logt);
         strftime(lognm, 4096, parm.c_str(), logtm);
-        conf->log_file = lognm;
+        log_file = lognm;
     } else if (pact == PARM_ACT_GET) {
-        parm = conf->log_file;
+        parm = log_file;
     }
     return;
 }
 
-static void conf_edit_log_level(ctx_config *conf, std::string &parm, enum PARM_ACT pact)
+void cls_config::edit_log_level(std::string &parm, enum PARM_ACT pact)
 {
     int parm_in;
     if (pact == PARM_ACT_DFLT) {
-        conf->log_level = 6;
+        log_level = 6;
     } else if (pact == PARM_ACT_SET) {
         parm_in = atoi(parm.c_str());
         if ((parm_in < 1) || (parm_in > 9)) {
             LOG_MSG(NTC,  NO_ERRNO, "Invalid log_level %d",parm_in);
         } else {
-            conf->log_level = parm_in;
+            log_level = parm_in;
         }
     } else if (pact == PARM_ACT_GET) {
-        parm = std::to_string(conf->log_level);
+        parm = std::to_string(log_level);
     } else if (pact == PARM_ACT_LIST) {
         parm = "[";
         parm = parm + "\"1\",\"2\",\"3\",\"4\",\"5\"";
@@ -123,88 +88,88 @@ static void conf_edit_log_level(ctx_config *conf, std::string &parm, enum PARM_A
     return;
 }
 
-static void conf_edit_webcontrol_port(ctx_config *conf, std::string &parm, enum PARM_ACT pact)
+void cls_config::edit_webcontrol_port(std::string &parm, enum PARM_ACT pact)
 {
     int parm_in;
     if (pact == PARM_ACT_DFLT) {
-        conf->webcontrol_port = 0;
+        webcontrol_port = 0;
     } else if (pact == PARM_ACT_SET) {
         parm_in = atoi(parm.c_str());
         if ((parm_in < 0) || (parm_in > 65535)) {
             LOG_MSG(NTC, NO_ERRNO, "Invalid webcontrol_port %d",parm_in);
         } else {
-            conf->webcontrol_port = parm_in;
+            webcontrol_port = parm_in;
         }
     } else if (pact == PARM_ACT_GET) {
-        parm = std::to_string(conf->webcontrol_port);
+        parm = std::to_string(webcontrol_port);
     }
     return;
 }
 
-static void conf_edit_webcontrol_base_path(ctx_config *conf, std::string &parm, enum PARM_ACT pact)
+void cls_config::edit_webcontrol_base_path(std::string &parm, enum PARM_ACT pact)
 {
     if (pact == PARM_ACT_DFLT) {
-        conf->webcontrol_base_path = "";
+        webcontrol_base_path = "";
     } else if (pact == PARM_ACT_SET) {
         if (parm == "/") {
             LOG_MSG(NTC, NO_ERRNO
                 , "Invalid webcontrol_base_path: Use blank instead of single / ");
-            conf->webcontrol_base_path = "";
+            webcontrol_base_path = "";
         } else if (parm.length() >= 1) {
             if (parm.substr(0, 1) != "/") {
                 LOG_MSG(NTC, NO_ERRNO
                     , "Invalid webcontrol_base_path:  Must start with a / ");
-                conf->webcontrol_base_path = "/" + parm;
+                webcontrol_base_path = "/" + parm;
             } else {
-                conf->webcontrol_base_path = parm;
+                webcontrol_base_path = parm;
             }
         } else {
-            conf->webcontrol_base_path = parm;
+            webcontrol_base_path = parm;
         }
     } else if (pact == PARM_ACT_GET) {
-        parm = conf->webcontrol_base_path;
+        parm = webcontrol_base_path;
     }
     return;
 }
 
-static void conf_edit_webcontrol_ipv6(ctx_config *conf, std::string &parm, enum PARM_ACT pact)
+void cls_config::edit_webcontrol_ipv6(std::string &parm, enum PARM_ACT pact)
 {
     if (pact == PARM_ACT_DFLT) {
-        conf->webcontrol_ipv6 = false;
+        webcontrol_ipv6 = false;
     } else if (pact == PARM_ACT_SET) {
-        conf_edit_set_bool(conf->webcontrol_ipv6, parm);
+        parm_set_bool(webcontrol_ipv6, parm);
     } else if (pact == PARM_ACT_GET) {
-        conf_edit_get_bool(parm, conf->webcontrol_ipv6);
+        parm_get_bool(parm, webcontrol_ipv6);
     }
     return;
 }
 
-static void conf_edit_webcontrol_localhost(ctx_config *conf, std::string &parm, enum PARM_ACT pact)
+void cls_config::edit_webcontrol_localhost(std::string &parm, enum PARM_ACT pact)
 {
     if (pact == PARM_ACT_DFLT) {
-        conf->webcontrol_localhost = true;
+        webcontrol_localhost = true;
     } else if (pact == PARM_ACT_SET) {
-        conf_edit_set_bool(conf->webcontrol_localhost, parm);
+        parm_set_bool(webcontrol_localhost, parm);
     } else if (pact == PARM_ACT_GET) {
-        conf_edit_get_bool(parm, conf->webcontrol_localhost);
+        parm_get_bool(parm, webcontrol_localhost);
     }
     return;
 }
 
-static void conf_edit_webcontrol_parms(ctx_config *conf, std::string &parm, enum PARM_ACT pact)
+void cls_config::edit_webcontrol_parms(std::string &parm, enum PARM_ACT pact)
 {
     int parm_in;
     if (pact == PARM_ACT_DFLT) {
-        conf->webcontrol_parms = 0;
+        webcontrol_parms = 0;
     } else if (pact == PARM_ACT_SET) {
         parm_in = atoi(parm.c_str());
         if ((parm_in < 0) || (parm_in > 3)) {
             LOG_MSG(NTC, NO_ERRNO, "Invalid webcontrol_parms %d",parm_in);
         } else {
-            conf->webcontrol_parms = parm_in;
+            webcontrol_parms = parm_in;
         }
     } else if (pact == PARM_ACT_GET) {
-        parm = std::to_string(conf->webcontrol_parms);
+        parm = std::to_string(webcontrol_parms);
     } else if (pact == PARM_ACT_LIST) {
         parm = "[";
         parm = parm +  "\"0\",\"1\",\"2\",\"3\"";
@@ -213,20 +178,20 @@ static void conf_edit_webcontrol_parms(ctx_config *conf, std::string &parm, enum
     return;
 }
 
-static void conf_edit_webcontrol_interface(ctx_config *conf, std::string &parm, enum PARM_ACT pact)
+void cls_config::edit_webcontrol_interface(std::string &parm, enum PARM_ACT pact)
 {
     if (pact == PARM_ACT_DFLT) {
-        conf->webcontrol_interface = "default";
+        webcontrol_interface = "default";
     } else if (pact == PARM_ACT_SET) {
         if ((parm == "default") || (parm == "user"))  {
-            conf->webcontrol_interface = parm;
+            webcontrol_interface = parm;
         } else if (parm == "") {
-            conf->webcontrol_interface = "default";
+            webcontrol_interface = "default";
         } else {
             LOG_MSG(NTC, NO_ERRNO, "Invalid webcontrol_interface %s", parm.c_str());
         }
     } else if (pact == PARM_ACT_GET) {
-        parm = conf->webcontrol_interface;
+        parm = webcontrol_interface;
     } else if (pact == PARM_ACT_LIST) {
         parm = "[";
         parm = parm +  "\"default\",\"user\"";
@@ -236,20 +201,20 @@ static void conf_edit_webcontrol_interface(ctx_config *conf, std::string &parm, 
     return;
 }
 
-static void conf_edit_webcontrol_auth_method(ctx_config *conf, std::string &parm, enum PARM_ACT pact)
+void cls_config::edit_webcontrol_auth_method(std::string &parm, enum PARM_ACT pact)
 {
     if (pact == PARM_ACT_DFLT) {
-        conf->webcontrol_auth_method = "none";
+        webcontrol_auth_method = "none";
     } else if (pact == PARM_ACT_SET) {
         if ((parm == "none") || (parm == "basic") || (parm == "digest"))  {
-            conf->webcontrol_auth_method = parm;
+            webcontrol_auth_method = parm;
         } else if (parm == "") {
-            conf->webcontrol_auth_method = "none";
+            webcontrol_auth_method = "none";
         } else {
             LOG_MSG(NTC, NO_ERRNO, "Invalid webcontrol_auth_method %s", parm.c_str());
         }
     } else if (pact == PARM_ACT_GET) {
-        parm = conf->webcontrol_auth_method;
+        parm = webcontrol_auth_method;
     } else if (pact == PARM_ACT_LIST) {
         parm = "[";
         parm = parm +  "\"none\",\"basic\",\"digest\"";
@@ -258,273 +223,257 @@ static void conf_edit_webcontrol_auth_method(ctx_config *conf, std::string &parm
     return;
 }
 
-static void conf_edit_webcontrol_authentication(ctx_config *conf, std::string &parm, enum PARM_ACT pact)
+void cls_config::edit_webcontrol_authentication(std::string &parm, enum PARM_ACT pact)
 {
     if (pact == PARM_ACT_DFLT) {
-        conf->webcontrol_authentication = "";
+        webcontrol_authentication = "";
     } else if (pact == PARM_ACT_SET) {
-        conf->webcontrol_authentication = parm;
+        webcontrol_authentication = parm;
     } else if (pact == PARM_ACT_GET) {
-        parm = conf->webcontrol_authentication;
+        parm = webcontrol_authentication;
     }
     return;
 }
 
-static void conf_edit_webcontrol_tls(ctx_config *conf, std::string &parm, enum PARM_ACT pact)
+void cls_config::edit_webcontrol_tls(std::string &parm, enum PARM_ACT pact)
 {
     if (pact == PARM_ACT_DFLT) {
-        conf->webcontrol_tls = false;
+        webcontrol_tls = false;
     } else if (pact == PARM_ACT_SET) {
-        conf_edit_set_bool(conf->webcontrol_tls, parm);
+        parm_set_bool(webcontrol_tls, parm);
     } else if (pact == PARM_ACT_GET) {
-        conf_edit_get_bool(parm, conf->webcontrol_tls);
+        parm_get_bool(parm, webcontrol_tls);
     }
     return;
 }
 
-static void conf_edit_webcontrol_cert(ctx_config *conf, std::string &parm, enum PARM_ACT pact)
+void cls_config::edit_webcontrol_cert(std::string &parm, enum PARM_ACT pact)
 {
     if (pact == PARM_ACT_DFLT) {
-        conf->webcontrol_cert = "";
+        webcontrol_cert = "";
     } else if (pact == PARM_ACT_SET) {
-        conf->webcontrol_cert = parm;
+        webcontrol_cert = parm;
     } else if (pact == PARM_ACT_GET) {
-        parm = conf->webcontrol_cert;
+        parm = webcontrol_cert;
     }
     return;
 }
 
-static void conf_edit_webcontrol_key(ctx_config *conf, std::string &parm, enum PARM_ACT pact)
+void cls_config::edit_webcontrol_key(std::string &parm, enum PARM_ACT pact)
 {
     if (pact == PARM_ACT_DFLT) {
-        conf->webcontrol_key = "";
+        webcontrol_key = "";
     } else if (pact == PARM_ACT_SET) {
-        conf->webcontrol_key = parm;
+        webcontrol_key = parm;
     } else if (pact == PARM_ACT_GET) {
-        parm = conf->webcontrol_key;
+        parm = webcontrol_key;
     }
     return;
 }
 
-static void conf_edit_webcontrol_headers(ctx_config *conf, std::string &parm, enum PARM_ACT pact)
+void cls_config::edit_webcontrol_headers(std::string &parm, enum PARM_ACT pact)
 {
     if (pact == PARM_ACT_DFLT) {
-        conf->webcontrol_headers = "";
+        webcontrol_headers = "";
     } else if (pact == PARM_ACT_SET) {
-        conf->webcontrol_headers = parm;
+        webcontrol_headers = parm;
     } else if (pact == PARM_ACT_GET) {
-        parm = conf->webcontrol_headers;
+        parm = webcontrol_headers;
     }
     return;
 }
 
-static void conf_edit_webcontrol_html(ctx_config *conf, std::string &parm, enum PARM_ACT pact)
+void cls_config::edit_webcontrol_html(std::string &parm, enum PARM_ACT pact)
 {
     if (pact == PARM_ACT_DFLT) {
-        conf->webcontrol_html = "";
+        webcontrol_html = "";
     } else if (pact == PARM_ACT_SET) {
-        conf->webcontrol_html = parm;
+        webcontrol_html = parm;
     } else if (pact == PARM_ACT_GET) {
-        parm = conf->webcontrol_html;
+        parm = webcontrol_html;
     }
     return;
 }
 
-static void conf_edit_webcontrol_lock_minutes(ctx_config *conf, std::string &parm, enum PARM_ACT pact)
+void cls_config::edit_webcontrol_lock_minutes(std::string &parm, enum PARM_ACT pact)
 {
     int parm_in;
     if (pact == PARM_ACT_DFLT) {
-        conf->webcontrol_lock_minutes = 10;
+        webcontrol_lock_minutes = 10;
     } else if (pact == PARM_ACT_SET) {
         parm_in = atoi(parm.c_str());
         if (parm_in < 0) {
             LOG_MSG(NTC, NO_ERRNO, "Invalid webcontrol_lock_minutes %d",parm_in);
         } else {
-            conf->webcontrol_lock_minutes = parm_in;
+            webcontrol_lock_minutes = parm_in;
         }
     } else if (pact == PARM_ACT_GET) {
-        parm = std::to_string(conf->webcontrol_lock_minutes);
+        parm = std::to_string(webcontrol_lock_minutes);
     }
     return;
 }
 
-static void conf_edit_webcontrol_lock_attempts(ctx_config *conf, std::string &parm, enum PARM_ACT pact)
+void cls_config::edit_webcontrol_lock_attempts(std::string &parm, enum PARM_ACT pact)
 {
     int parm_in;
     if (pact == PARM_ACT_DFLT) {
-        conf->webcontrol_lock_attempts = 3;
+        webcontrol_lock_attempts = 3;
     } else if (pact == PARM_ACT_SET) {
         parm_in = atoi(parm.c_str());
         if (parm_in < 0) {
             LOG_MSG(NTC, NO_ERRNO, "Invalid webcontrol_lock_attempts %d",parm_in);
         } else {
-            conf->webcontrol_lock_attempts = parm_in;
+            webcontrol_lock_attempts = parm_in;
         }
     } else if (pact == PARM_ACT_GET) {
-        parm = std::to_string(conf->webcontrol_lock_attempts);
+        parm = std::to_string(webcontrol_lock_attempts);
     }
     return;
 }
 
-static void conf_edit_webcontrol_lock_script(ctx_config *conf, std::string &parm, enum PARM_ACT pact)
+void cls_config::edit_webcontrol_lock_script(std::string &parm, enum PARM_ACT pact)
 {
     if (pact == PARM_ACT_DFLT) {
-        conf->webcontrol_lock_script = "";
+        webcontrol_lock_script = "";
     } else if (pact == PARM_ACT_SET) {
-        conf->webcontrol_lock_script = parm;
+        webcontrol_lock_script = parm;
     } else if (pact == PARM_ACT_GET) {
-        parm = conf->webcontrol_lock_script;
+        parm = webcontrol_lock_script;
     }
     return;
 }
 
-static void conf_edit_channels(ctx_config *conf, std::string &parm, enum PARM_ACT pact)
+void cls_config::edit_channels(std::string &parm, enum PARM_ACT pact)
 {
     if (pact == PARM_ACT_DFLT) {
-        conf->channels.clear();
+        channels.clear();
         if (parm != "") {
-            conf->channels.push_back(parm);
+            channels.push_back(parm);
         }
     } else if (pact == PARM_ACT_SET) {
         if (parm == "") {
             return;
         }
-        conf->channels.push_back(parm);   /* Add to the end of list*/
+        channels.push_back(parm);   /* Add to the end of list*/
     } else if (pact == PARM_ACT_GET) {
-        if (conf->channels.empty()) {
+        if (channels.empty()) {
             parm = "";
         } else {
-            parm = conf->channels.back();     /* Give last item*/
+            parm = channels.back();     /* Give last item*/
         }
     }
     return;
 }
 
-static void conf_edit_channels(ctx_config *conf, std::list<std::string> &parm, enum PARM_ACT pact)
+void cls_config::edit_channels(std::list<std::string> &parm, enum PARM_ACT pact)
 {
     if (pact == PARM_ACT_DFLT) {
-        conf->channels.clear();
+        channels.clear();
     } else if (pact == PARM_ACT_SET) {
-        conf->channels = parm;
+        channels = parm;
     } else if (pact == PARM_ACT_GET) {
-        parm = conf->channels;
+        parm = channels;
     }
     return;
 }
 
-static void conf_edit_cat00(ctx_config *conf, std::string parm_nm
+void cls_config::edit_cat00(std::string parm_nm
         , std::string &parm_val, enum PARM_ACT pact)
 {
-    if (parm_nm == "log_file") {            conf_edit_log_file(conf, parm_val, pact);
-    } else if (parm_nm == "log_level") {    conf_edit_log_level(conf, parm_val, pact);
-    }
-}
-static void conf_edit_cat01(ctx_config *conf, std::string parm_nm
-        , std::string &parm_val, enum PARM_ACT pact)
-{
-    if (parm_nm == "webcontrol_port") {                    conf_edit_webcontrol_port(conf, parm_val, pact);
-    } else if (parm_nm == "webcontrol_base_path") {        conf_edit_webcontrol_base_path(conf, parm_val, pact);
-    } else if (parm_nm == "webcontrol_ipv6") {             conf_edit_webcontrol_ipv6(conf, parm_val, pact);
-    } else if (parm_nm == "webcontrol_localhost") {        conf_edit_webcontrol_localhost(conf, parm_val, pact);
-    } else if (parm_nm == "webcontrol_parms") {            conf_edit_webcontrol_parms(conf, parm_val, pact);
-    } else if (parm_nm == "webcontrol_interface") {        conf_edit_webcontrol_interface(conf, parm_val, pact);
-    } else if (parm_nm == "webcontrol_auth_method") {      conf_edit_webcontrol_auth_method(conf, parm_val, pact);
-    } else if (parm_nm == "webcontrol_authentication") {   conf_edit_webcontrol_authentication(conf, parm_val, pact);
-    } else if (parm_nm == "webcontrol_tls") {              conf_edit_webcontrol_tls(conf, parm_val, pact);
-    } else if (parm_nm == "webcontrol_cert") {             conf_edit_webcontrol_cert(conf, parm_val, pact);
-    } else if (parm_nm == "webcontrol_key") {              conf_edit_webcontrol_key(conf, parm_val, pact);
-    } else if (parm_nm == "webcontrol_headers") {          conf_edit_webcontrol_headers(conf, parm_val, pact);
-    } else if (parm_nm == "webcontrol_html") {             conf_edit_webcontrol_html(conf, parm_val, pact);
-    } else if (parm_nm == "webcontrol_lock_minutes") {     conf_edit_webcontrol_lock_minutes(conf, parm_val, pact);
-    } else if (parm_nm == "webcontrol_lock_attempts") {    conf_edit_webcontrol_lock_attempts(conf, parm_val, pact);
-    } else if (parm_nm == "webcontrol_lock_script") {      conf_edit_webcontrol_lock_script(conf, parm_val, pact);
+    if (parm_nm == "log_file") {            edit_log_file(parm_val, pact);
+    } else if (parm_nm == "log_level") {    edit_log_level(parm_val, pact);
     }
 }
 
-static void conf_edit_cat02(ctx_config *conf, std::string parm_nm
+void cls_config::edit_cat01(std::string parm_nm
+        , std::string &parm_val, enum PARM_ACT pact)
+{
+    if (parm_nm == "webcontrol_port") {                    edit_webcontrol_port(parm_val, pact);
+    } else if (parm_nm == "webcontrol_base_path") {        edit_webcontrol_base_path(parm_val, pact);
+    } else if (parm_nm == "webcontrol_ipv6") {             edit_webcontrol_ipv6(parm_val, pact);
+    } else if (parm_nm == "webcontrol_localhost") {        edit_webcontrol_localhost(parm_val, pact);
+    } else if (parm_nm == "webcontrol_parms") {            edit_webcontrol_parms(parm_val, pact);
+    } else if (parm_nm == "webcontrol_interface") {        edit_webcontrol_interface(parm_val, pact);
+    } else if (parm_nm == "webcontrol_auth_method") {      edit_webcontrol_auth_method(parm_val, pact);
+    } else if (parm_nm == "webcontrol_authentication") {   edit_webcontrol_authentication(parm_val, pact);
+    } else if (parm_nm == "webcontrol_tls") {              edit_webcontrol_tls(parm_val, pact);
+    } else if (parm_nm == "webcontrol_cert") {             edit_webcontrol_cert(parm_val, pact);
+    } else if (parm_nm == "webcontrol_key") {              edit_webcontrol_key(parm_val, pact);
+    } else if (parm_nm == "webcontrol_headers") {          edit_webcontrol_headers(parm_val, pact);
+    } else if (parm_nm == "webcontrol_html") {             edit_webcontrol_html(parm_val, pact);
+    } else if (parm_nm == "webcontrol_lock_minutes") {     edit_webcontrol_lock_minutes(parm_val, pact);
+    } else if (parm_nm == "webcontrol_lock_attempts") {    edit_webcontrol_lock_attempts(parm_val, pact);
+    } else if (parm_nm == "webcontrol_lock_script") {      edit_webcontrol_lock_script(parm_val, pact);
+    }
+}
+
+void cls_config::edit_cat02(std::string parm_nm
         ,std::string &parm_val, enum PARM_ACT pact)
 {
-    if (parm_nm == "channel") {  conf_edit_channels(conf, parm_val, pact);
+    if (parm_nm == "channel") {  edit_channels(parm_val, pact);
     }
 }
 
-static void conf_edit_cat02(ctx_config *conf, std::string parm_nm
+void cls_config::edit_cat02(std::string parm_nm
         ,std::list<std::string> &parm_val, enum PARM_ACT pact)
 {
-    if (parm_nm == "channel") {  conf_edit_channels(conf, parm_val, pact);
+    if (parm_nm == "channel") {  edit_channels(parm_val, pact);
     }
 }
 
-static void conf_edit_cat(ctx_config *conf, std::string parm_nm
+void cls_config::edit_cat(std::string parm_nm
         , std::string &parm_val, enum PARM_ACT pact, enum PARM_CAT pcat)
 {
-    if (pcat == PARM_CAT_00) {          conf_edit_cat00(conf, parm_nm, parm_val, pact);
-    } else if (pcat == PARM_CAT_01) {   conf_edit_cat01(conf, parm_nm, parm_val, pact);
-    } else if (pcat == PARM_CAT_02) {   conf_edit_cat02(conf, parm_nm, parm_val, pact);
+    if (pcat == PARM_CAT_00) {          edit_cat00(parm_nm, parm_val, pact);
+    } else if (pcat == PARM_CAT_01) {   edit_cat01(parm_nm, parm_val, pact);
+    } else if (pcat == PARM_CAT_02) {   edit_cat02(parm_nm, parm_val, pact);
     }
 }
 
-static void conf_edit_cat(ctx_config *conf, std::string parm_nm
+void cls_config::edit_cat(std::string parm_nm
         ,std::list<std::string> &parm_val, enum PARM_ACT pact, enum PARM_CAT pcat)
 {
     if (pcat == PARM_CAT_02) {
-        conf_edit_cat02(conf, parm_nm, parm_val, pact);
+        edit_cat02(parm_nm, parm_val, pact);
     }
 }
 
-static void conf_edit_dflt(ctx_config *conf)
-{
-    int indx;
-    std::string dflt = "";
-
-    indx = 0;
-    while (config_parms[indx].parm_name != "") {
-        conf_edit_cat(conf, config_parms[indx].parm_name, dflt
-            , PARM_ACT_DFLT, config_parms[indx].parm_cat);
-        indx++;
-    }
-}
-
-void conf_edit_get(ctx_config *conf, std::string parm_nm
+void cls_config::parm_get(std::string parm_nm
     , std::string &parm_val, enum PARM_CAT parm_cat)
 {
-    conf_edit_cat(conf, parm_nm, parm_val, PARM_ACT_GET, parm_cat);
+    edit_cat(parm_nm, parm_val, PARM_ACT_GET, parm_cat);
 }
 
-void conf_edit_get(ctx_config *conf, std::string parm_nm
+void cls_config::parm_get(std::string parm_nm
     , std::list<std::string> &parm_val, enum PARM_CAT parm_cat)
 {
-    conf_edit_cat(conf, parm_nm, parm_val, PARM_ACT_GET, parm_cat);
+    edit_cat(parm_nm, parm_val, PARM_ACT_GET, parm_cat);
 }
 
 /* Assign the parameter value */
-void conf_edit_set(ctx_config *conf, std::string parm_nm
+void cls_config::parm_set(std::string parm_nm
         , std::string parm_val)
 {
-    int indx;
-    enum PARM_CAT pcat;
+    std::vector<ctx_config_item>::iterator cfg_it;
 
-    indx = 0;
-    while (config_parms[indx].parm_name != "") {
-        if (parm_nm ==  config_parms[indx].parm_name) {
-            pcat = config_parms[indx].parm_cat;
-            conf_edit_cat(conf, parm_nm, parm_val, PARM_ACT_SET, pcat);
+    for (cfg_it = config_parms.begin();
+        cfg_it != config_parms.end(); cfg_it++) {
+        if (parm_nm == cfg_it->parm_name) {
+            edit_cat(parm_nm, parm_val, PARM_ACT_SET, cfg_it->parm_cat);
             return;
         }
-        indx++;
     }
-
     LOG_MSG(ALR, NO_ERRNO, "Unknown config option \"%s\"", parm_nm.c_str());
 }
 
 /* Get list of valid values for items only permitting a set*/
-void conf_edit_list(ctx_config *conf, std::string parm_nm, std::string &parm_val
+void cls_config::parm_list(std::string parm_nm, std::string &parm_val
         , enum PARM_CAT parm_cat)
 {
-    conf_edit_cat(conf, parm_nm, parm_val, PARM_ACT_LIST, parm_cat);
+    edit_cat(parm_nm, parm_val, PARM_ACT_LIST, parm_cat);
 }
 
-std::string conf_type_desc(enum PARM_TYP ptype)
+std::string cls_config::conf_type_desc(enum PARM_TYP ptype)
 {
     if (ptype == PARM_TYP_BOOL) {           return "bool";
     } else if (ptype == PARM_TYP_INT) {     return "int";
@@ -536,8 +485,8 @@ std::string conf_type_desc(enum PARM_TYP ptype)
 }
 
 /* Return a string describing the parameter category */
-std::string conf_cat_desc(enum PARM_CAT pcat, bool shrt) {
-
+std::string cls_config::conf_cat_desc(enum PARM_CAT pcat, bool shrt)
+{
     if (shrt) {
         if (pcat == PARM_CAT_00)        { return "app";
         } else if (pcat == PARM_CAT_01) { return "webcontrol";
@@ -554,7 +503,7 @@ std::string conf_cat_desc(enum PARM_CAT pcat, bool shrt) {
 }
 
 /** Prints usage and options allowed from Command-line. */
-static void usage(void)
+void cls_config::usage()
 {
     printf("Restream version %s, Copyright 2023\n","0.1.1");
     printf("\nusage:\trestream [options]\n");
@@ -568,7 +517,7 @@ static void usage(void)
 }
 
 /** Process Command-line options specified */
-static void conf_cmdline(cls_app *app)
+void cls_config::process_cmdline()
 {
     int c;
 
@@ -578,10 +527,10 @@ static void conf_cmdline(cls_app *app)
             app->conf_file.assign(optarg);
             break;
         case 'd':
-            app->conf->log_level= atoi(optarg);
+            app->log_level= atoi(optarg);
             break;
         case 'l':
-            app->conf->log_file.assign(optarg);
+            app->log_file.assign(optarg);
             break;
         case 'h':
         case '?':
@@ -594,7 +543,7 @@ static void conf_cmdline(cls_app *app)
 }
 
 /** Process each line from the config file. */
-void conf_process(cls_app *app)
+void cls_config::process_file()
 {
     size_t stpos;
     std::string line, parm_nm, parm_vl;
@@ -632,7 +581,7 @@ void conf_process(cls_app *app)
                 parm_vl = line.substr(stpos+1, line.length()-stpos);
                 myunquote(parm_nm);
                 myunquote(parm_vl);
-                conf_edit_set(app->conf, parm_nm, parm_vl);
+                parm_set(parm_nm, parm_vl);
             } else if ((line != "") &&
                 (line.substr(0, 1) != ";") &&
                 (line.substr(0, 1) != "#") &&
@@ -646,38 +595,35 @@ void conf_process(cls_app *app)
 }
 
 /**  Write the configuration(s) to the log */
-void conf_parms_log(cls_app *app)
+void cls_config::parms_log()
 {
-    int i;
-    std::string parm_vl, parm_main, parm_nm;
+    std::string parm_vl;
     std::list<std::string> parm_array;
     std::list<std::string>::iterator it;
-    enum PARM_CAT parm_ct;
-    enum PARM_TYP parm_typ;
+    std::vector<ctx_config_item>::iterator cfg_it;
 
-    log_msg(INF, NO_ERRNO,false,"Logging parameters from config file: %s"
+    log_msg(INF, NO_ERRNO,false
+        ,"Logging parameters from config file: %s"
         , app->conf_file.c_str());
 
-    i = 0;
-    while (config_parms[i].parm_name != "") {
-        parm_nm=config_parms[i].parm_name;
-        parm_ct=config_parms[i].parm_cat;
-        parm_typ=config_parms[i].parm_type;
-        if (parm_typ == PARM_TYP_ARRAY) {
-            conf_edit_get(app->conf, parm_nm, parm_array, parm_ct);
+    for (cfg_it = config_parms.begin();
+        cfg_it != config_parms.end(); cfg_it++) {
+        if (cfg_it->parm_type == PARM_TYP_ARRAY) {
+            parm_get(cfg_it->parm_name, parm_array, cfg_it->parm_cat);
             for (it = parm_array.begin(); it != parm_array.end(); it++) {
-                log_msg(INF, NO_ERRNO, false, "%-25s %s", parm_nm.c_str(), it->c_str());
+                log_msg(INF, NO_ERRNO, false, "%-25s %s"
+                    , cfg_it->parm_name.c_str(), it->c_str());
             }
         } else {
-            conf_edit_get(app->conf, parm_nm, parm_vl, parm_ct);
-            log_msg(INF, NO_ERRNO,false, "%-25s %s", parm_nm.c_str(), parm_vl.c_str());
+            parm_get(cfg_it->parm_name, parm_vl, cfg_it->parm_cat);
+            log_msg(INF, NO_ERRNO,false, "%-25s %s"
+                , cfg_it->parm_name.c_str(), parm_vl.c_str());
         }
-
-        i++;
     }
 }
 
-void conf_parms_write_parms(FILE *conffile, std::string parm_nm
+void cls_config::parms_write_parms(
+    FILE *conffile, std::string parm_nm
     , std::string parm_vl, enum PARM_CAT parm_ct, bool reset)
 {
     static enum PARM_CAT prev_ct;
@@ -702,14 +648,12 @@ void conf_parms_write_parms(FILE *conffile, std::string parm_nm
 }
 
 /**  Write the configuration(s) to file */
-void conf_parms_write(cls_app *app)
+void cls_config::parms_write()
 {
-    int i;
-    std::string parm_vl, parm_main, parm_nm;
+    std::string parm_vl;
     std::list<std::string> parm_array;
     std::list<std::string>::iterator it;
-    enum PARM_CAT parm_ct;
-    enum PARM_TYP parm_typ;
+    std::vector<ctx_config_item>::iterator cfg_it;
     char timestamp[32];
     FILE *conffile;
 
@@ -728,23 +672,21 @@ void conf_parms_write(cls_app *app)
     fprintf(conffile, "; at %s\n", timestamp);
     fprintf(conffile, "\n\n");
 
-    conf_parms_write_parms(conffile, "", "", PARM_CAT_00, true);
+    parms_write_parms(conffile, "", "", PARM_CAT_00, true);
 
-    i=0;
-    while (config_parms[i].parm_name != "") {
-        parm_nm=config_parms[i].parm_name;
-        parm_ct=config_parms[i].parm_cat;
-        parm_typ=config_parms[i].parm_type;
-        if (parm_typ == PARM_TYP_ARRAY) {
-            conf_edit_get(app->conf, parm_nm, parm_array, parm_ct);
+    for (cfg_it = config_parms.begin();
+        cfg_it != config_parms.end(); cfg_it++) {
+        if (cfg_it->parm_type == PARM_TYP_ARRAY) {
+            parm_get(cfg_it->parm_name, parm_array,cfg_it->parm_cat);
             for (it = parm_array.begin(); it != parm_array.end(); it++) {
-                conf_parms_write_parms(conffile, parm_nm, it->c_str(), parm_ct, false);
+                parms_write_parms(conffile, cfg_it->parm_name
+                    , it->c_str(), cfg_it->parm_cat, false);
             }
         } else {
-            conf_edit_get(app->conf, parm_nm, parm_vl, parm_ct);
-            conf_parms_write_parms(conffile, parm_nm, parm_vl, parm_ct, false);
+            parm_get(cfg_it->parm_name, parm_vl, cfg_it->parm_cat);
+            parms_write_parms(conffile, cfg_it->parm_name
+                , parm_vl, cfg_it->parm_cat, false);
         }
-        i++;
     }
 
     fprintf(conffile, "\n");
@@ -755,15 +697,63 @@ void conf_parms_write(cls_app *app)
         , app->conf_file.c_str());
 }
 
-void conf_init(cls_app *app)
+void cls_config::parms_dflt()
+{
+    std::vector<ctx_config_item>::iterator cfg_it;
+    std::string dflt = "";
+
+    for (cfg_it = config_parms.begin();
+        cfg_it != config_parms.end(); cfg_it++) {
+        edit_cat(cfg_it->parm_name, dflt, PARM_ACT_DFLT, cfg_it->parm_cat);
+    }
+}
+
+void cls_config::parms_add(std::string pname, enum PARM_TYP ptyp
+    , enum PARM_CAT pcat, enum WEBUI_LEVEL plvl)
+{
+    ctx_config_item  config_itm;
+
+    config_itm.parm_name = pname;
+    config_itm.parm_type = ptyp;
+    config_itm.parm_cat = pcat;
+    config_itm.webui_level = plvl;
+
+    config_parms.push_back(config_itm);
+}
+
+void cls_config::parms_init()
+{
+    parms_add("log_file",                  PARM_TYP_STRING, PARM_CAT_00, WEBUI_LEVEL_ADVANCED);
+    parms_add("log_level",                 PARM_TYP_LIST,   PARM_CAT_00, WEBUI_LEVEL_LIMITED);
+    parms_add("webcontrol_port",           PARM_TYP_INT,    PARM_CAT_01, WEBUI_LEVEL_ADVANCED);
+    parms_add("webcontrol_port2",          PARM_TYP_INT,    PARM_CAT_01, WEBUI_LEVEL_ADVANCED);
+    parms_add("webcontrol_base_path",      PARM_TYP_STRING, PARM_CAT_01, WEBUI_LEVEL_ADVANCED);
+    parms_add("webcontrol_ipv6",           PARM_TYP_BOOL,   PARM_CAT_01, WEBUI_LEVEL_ADVANCED);
+    parms_add("webcontrol_localhost",      PARM_TYP_BOOL,   PARM_CAT_01, WEBUI_LEVEL_ADVANCED);
+    parms_add("webcontrol_parms",          PARM_TYP_LIST,   PARM_CAT_01, WEBUI_LEVEL_NEVER);
+    parms_add("webcontrol_interface",      PARM_TYP_LIST,   PARM_CAT_01, WEBUI_LEVEL_ADVANCED);
+    parms_add("webcontrol_auth_method",    PARM_TYP_LIST,   PARM_CAT_01, WEBUI_LEVEL_RESTRICTED);
+    parms_add("webcontrol_authentication", PARM_TYP_STRING, PARM_CAT_01, WEBUI_LEVEL_RESTRICTED);
+    parms_add("webcontrol_tls",            PARM_TYP_BOOL,   PARM_CAT_01, WEBUI_LEVEL_RESTRICTED);
+    parms_add("webcontrol_cert",           PARM_TYP_STRING, PARM_CAT_01, WEBUI_LEVEL_RESTRICTED);
+    parms_add("webcontrol_key",            PARM_TYP_STRING, PARM_CAT_01, WEBUI_LEVEL_RESTRICTED);
+    parms_add("webcontrol_headers",        PARM_TYP_STRING, PARM_CAT_01, WEBUI_LEVEL_ADVANCED);
+    parms_add("webcontrol_html",           PARM_TYP_STRING, PARM_CAT_01, WEBUI_LEVEL_ADVANCED);
+    parms_add("webcontrol_lock_minutes",   PARM_TYP_INT,    PARM_CAT_01, WEBUI_LEVEL_ADVANCED);
+    parms_add("webcontrol_lock_attempts",  PARM_TYP_INT,    PARM_CAT_01, WEBUI_LEVEL_ADVANCED);
+    parms_add("webcontrol_lock_script",    PARM_TYP_STRING, PARM_CAT_01, WEBUI_LEVEL_RESTRICTED);
+    parms_add("channel",                   PARM_TYP_ARRAY,  PARM_CAT_02, WEBUI_LEVEL_ADVANCED);
+}
+
+cls_config::cls_config()
 {
     std::string filename;
     char path[PATH_MAX];
     struct stat statbuf;
 
-    conf_edit_dflt(app->conf);
-
-    conf_cmdline(app);
+    parms_init();
+    parms_dflt();
+    process_cmdline();
 
     filename = "";
     if (app->conf_file != "") {
@@ -806,7 +796,11 @@ void conf_init(cls_app *app)
 
     app->conf_file = filename;
 
-    conf_process(app);
+    process_file();
 
 }
 
+cls_config::~cls_config()
+{
+
+}

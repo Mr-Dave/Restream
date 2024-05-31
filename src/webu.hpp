@@ -97,11 +97,9 @@
         struct timespec             time_last;      /* Keep track of processing time for stream thread*/
         int                         mhd_first;      /* Boolean for whether it is the first connection*/
         struct MHD_Connection       *connection;    /* The MHD connection value from the client */
-        cls_app                     *app;           /* The Restream application pointer */
-
     };
 
-    void webu_init(cls_app *app);
-    void webu_deinit(cls_app *app);
+    void webu_init();
+    void webu_deinit();
 
 #endif /* _INCLUDE_WEBU_HPP_ */

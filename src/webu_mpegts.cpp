@@ -65,7 +65,7 @@ static void webu_mpegts_packet_wait(ctx_webui *webui)
     int64_t tm_diff, pts_diff, tot_diff;
     int64_t sec_full, sec_msec;
 
-    if (webui->app->webcontrol_finish == true) {
+    if (app->webcontrol_finish == true) {
         return;
     }
 
@@ -320,7 +320,7 @@ static void webu_mpegts_packet_write(ctx_webui *webui)
     int retcd;
     char errstr[128];
 
-    if (webui->app->webcontrol_finish == true) {
+    if (app->webcontrol_finish == true) {
         return;
     }
 
@@ -439,7 +439,7 @@ static void webu_mpegts_getimg(ctx_webui *webui)
     while (
         (chk < 1000000) &&
         (pktready == false) &&
-        (webui->app->webcontrol_finish == false)) {
+        (app->webcontrol_finish == false)) {
 
         SLEEP(0, webui->msec_cnt * 1000);
         pktready = webu_mpegts_pkt_get(webui, indx_next);
@@ -478,7 +478,7 @@ static ssize_t webu_mpegts_response(void *cls, uint64_t pos, char *buf, size_t m
     size_t sent_bytes;
     (void)pos;
 
-    if (webui->app->webcontrol_finish == true) {
+    if (app->webcontrol_finish == true) {
         return -1;
     }
 
@@ -757,7 +757,7 @@ static int webu_mpegts_open(ctx_webui *webui)
     unsigned char   *buf_image;
     AVDictionary    *opts;
 
-    if (webui->app->webcontrol_finish == true) {
+    if (app->webcontrol_finish == true) {
         return -1;
     }
 
@@ -841,7 +841,7 @@ mhdrslt webu_mpegts_main(ctx_webui *webui)
     struct MHD_Response *response;
     std::list<ctx_params_item>::iterator    it;
 
-    if (webui->app->webcontrol_finish == true) {
+    if (app->webcontrol_finish == true) {
         return MHD_NO;
     }
 
@@ -858,8 +858,8 @@ mhdrslt webu_mpegts_main(ctx_webui *webui)
         return MHD_NO;
     }
 
-    for (it  = webui->app->webcontrol_headers.params_array.begin();
-         it != webui->app->webcontrol_headers.params_array.end(); it++) {
+    for (it  = app->webcontrol_headers.params_array.begin();
+         it != app->webcontrol_headers.params_array.end(); it++) {
         MHD_add_response_header (response
             , it->param_name.c_str(), it->param_value.c_str());
     }
@@ -929,7 +929,7 @@ static int webu_stream_checks(ctx_webui *webui)
             return -1;
     }
 
-    if (webui->app->webcontrol_finish == true) {
+    if (app->webcontrol_finish == true) {
         return -1;
     }
 

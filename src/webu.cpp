@@ -43,7 +43,6 @@ void webu_html_badreq(ctx_webui *webui)
 
 /* Context to pass the parms to functions to start mhd */
 struct ctx_mhdstart {
-    cls_app              *app;
     std::string             tls_cert;
     std::string             tls_key;
     bool                    tls_use;
@@ -56,7 +55,7 @@ struct ctx_mhdstart {
 };
 
 /* Set defaults for the webui context */
-static void webu_context_init(cls_app *app, ctx_webui *webui)
+static void webu_context_init(ctx_webui *webui)
 {
     webui->url           = "";
     webui->uri_chid     = "";
@@ -76,7 +75,6 @@ static void webu_context_init(cls_app *app, ctx_webui *webui)
     webui->stream_pos    = 0;                           /* Stream position of image being sent */
     webui->stream_fps    = 300;                         /* Stream rate */
     webui->resp_page     = "";                          /* The response being constructed */
-    webui->app           = app;                         /* The application context */
     webui->cnct_type     = WEBUI_CNCT_UNKNOWN;
     webui->resp_type     = WEBUI_RESP_HTML;             /* Default to html response */
     webui->cnct_method   = WEBUI_METHOD_GET;
@@ -136,10 +134,10 @@ static void webu_parms_edit(ctx_webui *webui)
         }
     }
 
-    for (indx=0; indx<webui->app->ch_count; indx++) {
-        if (atoi(webui->app->channels[indx].ch_nbr.c_str()) == webui->channel_id) {
+    for (indx=0; indx<app->ch_count; indx++) {
+        if (atoi(app->channels[indx].ch_nbr.c_str()) == webui->channel_id) {
             webui->channel_indx = indx;
-            webui->chitm = &webui->app->channels[indx];
+            webui->chitm = &app->channels[indx];
         }
     }
 
@@ -176,7 +174,7 @@ static int webu_parseurl(ctx_webui *webui)
 
     LOG_MSG(DBG, NO_ERRNO, "Decoded url: %s",webui->url.c_str());
 
-    baselen = webui->app->conf->webcontrol_base_path.length();
+    baselen = app->conf->webcontrol_base_path.length();
 
     if (webui->url.length() < baselen) {
         return -1;
@@ -187,7 +185,7 @@ static int webu_parseurl(ctx_webui *webui)
     }
 
     if (webui->url.substr(0, baselen) !=
-        webui->app->conf->webcontrol_base_path) {
+        app->conf->webcontrol_base_path) {
         return -1;
     }
 
@@ -259,7 +257,7 @@ static void webu_clientip(ctx_webui *webui)
     int is_ipv6;
 
     is_ipv6 = false;
-    if (webui->app->conf->webcontrol_ipv6) {
+    if (app->conf->webcontrol_ipv6) {
         is_ipv6 = true;
     }
 
@@ -295,11 +293,11 @@ static void webu_hostname(ctx_webui *webui)
     hdr = MHD_lookup_connection_value(webui->connection, MHD_HEADER_KIND, MHD_HTTP_HEADER_HOST);
     if (hdr == NULL) {
         webui->hostfull = "//localhost:" +
-            std::to_string(webui->app->conf->webcontrol_port) +
-            webui->app->conf->webcontrol_base_path;
+            std::to_string(app->conf->webcontrol_port) +
+            app->conf->webcontrol_base_path;
     } else {
         webui->hostfull = "//" +  std::string(hdr) +
-            webui->app->conf->webcontrol_base_path;
+            app->conf->webcontrol_base_path;
     }
 
     LOG_MSG(DBG, NO_ERRNO, "Full Host:  %s", webui->hostfull.c_str());
@@ -319,8 +317,8 @@ static void webu_failauth_log(ctx_webui *webui, bool userid_fail)
 
     clock_gettime(CLOCK_MONOTONIC, &tm_cnct);
 
-    it = webui->app->webcontrol_clients.begin();
-    while (it != webui->app->webcontrol_clients.end()) {
+    it = app->webcontrol_clients.begin();
+    while (it != app->webcontrol_clients.end()) {
         if (it->clientip == webui->clientip) {
             it->conn_nbr++;
             it->conn_time.tv_sec =tm_cnct.tv_sec;
@@ -344,7 +342,7 @@ static void webu_failauth_log(ctx_webui *webui, bool userid_fail)
         clients.userid_fail_nbr = 0;
     }
 
-    webui->app->webcontrol_clients.push_back(clients);
+    app->webcontrol_clients.push_back(clients);
 
     return;
 
@@ -359,11 +357,11 @@ static void webu_client_connect(ctx_webui *webui)
     clock_gettime(CLOCK_MONOTONIC, &tm_cnct);
 
     /* First we need to clean out any old IPs from the list*/
-    it = webui->app->webcontrol_clients.begin();
-    while (it != webui->app->webcontrol_clients.end()) {
+    it = app->webcontrol_clients.begin();
+    while (it != app->webcontrol_clients.end()) {
         if ((tm_cnct.tv_sec - it->conn_time.tv_sec) >=
-            (webui->app->conf->webcontrol_lock_minutes*60)) {
-            it = webui->app->webcontrol_clients.erase(it);
+            (app->conf->webcontrol_lock_minutes*60)) {
+            it = app->webcontrol_clients.erase(it);
         }
         it++;
     }
@@ -372,8 +370,8 @@ static void webu_client_connect(ctx_webui *webui)
      * so we reset the info and as needed print a message that the
      * ip is connected.
      */
-    it = webui->app->webcontrol_clients.begin();
-    while (it != webui->app->webcontrol_clients.end()) {
+    it = app->webcontrol_clients.begin();
+    while (it != app->webcontrol_clients.end()) {
         if (it->clientip == webui->clientip) {
             if (it->authenticated == false) {
                 LOG_MSG(INF, NO_ERRNO, "Connection from: %s",webui->clientip.c_str());
@@ -393,7 +391,7 @@ static void webu_client_connect(ctx_webui *webui)
     clients.userid_fail_nbr = 0;
     clients.conn_time = tm_cnct;
     clients.authenticated = true;
-    webui->app->webcontrol_clients.push_back(clients);
+    app->webcontrol_clients.push_back(clients);
 
     LOG_MSG(INF, NO_ERRNO, "Connection from: %s",webui->clientip.c_str());
 
@@ -408,26 +406,26 @@ static mhdrslt webu_failauth_check(ctx_webui *webui)
     std::list<ctx_webu_clients>::iterator   it;
     std::string                             tmp;
 
-    if (webui->app->webcontrol_clients.size() == 0) {
+    if (app->webcontrol_clients.size() == 0) {
         return MHD_YES;
     }
 
     clock_gettime(CLOCK_MONOTONIC, &tm_cnct);
-    it = webui->app->webcontrol_clients.begin();
-    while (it != webui->app->webcontrol_clients.end()) {
+    it = app->webcontrol_clients.begin();
+    while (it != app->webcontrol_clients.end()) {
         if ((it->clientip == webui->clientip) &&
             ((tm_cnct.tv_sec - it->conn_time.tv_sec) <
-             (webui->app->conf->webcontrol_lock_minutes*60)) &&
+             (app->conf->webcontrol_lock_minutes*60)) &&
             (it->authenticated == false) &&
-            (it->conn_nbr > webui->app->conf->webcontrol_lock_attempts)) {
+            (it->conn_nbr > app->conf->webcontrol_lock_attempts)) {
             LOG_MSG(EMG, NO_ERRNO
                 , "Ignoring connection from: %s"
                 , webui->clientip.c_str());
             it->conn_time = tm_cnct;
             return MHD_NO;
         } else if ((tm_cnct.tv_sec - it->conn_time.tv_sec) >=
-            (webui->app->conf->webcontrol_lock_minutes*60)) {
-            it = webui->app->webcontrol_clients.erase(it);
+            (app->conf->webcontrol_lock_minutes*60)) {
+            it = app->webcontrol_clients.erase(it);
         } else {
             it++;
         }
@@ -574,19 +572,19 @@ static void webu_mhd_auth_parse(ctx_webui *webui)
     myfree(&webui->auth_user);
     myfree(&webui->auth_pass);
 
-    auth_len = (int)webui->app->conf->webcontrol_authentication.length();
-    col_pos =(char*) strstr(webui->app->conf->webcontrol_authentication.c_str() ,":");
+    auth_len = (int)app->conf->webcontrol_authentication.length();
+    col_pos =(char*) strstr(app->conf->webcontrol_authentication.c_str() ,":");
     if (col_pos == NULL) {
         webui->auth_user = (char*)mymalloc(auth_len+1);
         webui->auth_pass = (char*)mymalloc(2);
         snprintf(webui->auth_user, auth_len + 1, "%s"
-            ,webui->app->conf->webcontrol_authentication.c_str());
+            ,app->conf->webcontrol_authentication.c_str());
         snprintf(webui->auth_pass, 2, "%s","");
     } else {
         webui->auth_user = (char*)mymalloc(auth_len - strlen(col_pos) + 1);
         webui->auth_pass =(char*)mymalloc(strlen(col_pos));
         snprintf(webui->auth_user, auth_len - strlen(col_pos) + 1, "%s"
-            ,webui->app->conf->webcontrol_authentication.c_str());
+            ,app->conf->webcontrol_authentication.c_str());
         snprintf(webui->auth_pass, strlen(col_pos), "%s", col_pos + 1);
     }
 
@@ -604,9 +602,9 @@ static mhdrslt webu_mhd_auth(ctx_webui *webui)
 
     snprintf(webui->auth_realm, WEBUI_LEN_PARM, "%s","Restream");
 
-    if (webui->app->conf->webcontrol_authentication == "") {
+    if (app->conf->webcontrol_authentication == "") {
         webui->authenticated = true;
-        if (webui->app->conf->webcontrol_auth_method != "none") {
+        if (app->conf->webcontrol_auth_method != "none") {
             LOG_MSG(NTC, NO_ERRNO ,"No webcontrol user:pass provided");
         }
         return MHD_YES;
@@ -616,9 +614,9 @@ static mhdrslt webu_mhd_auth(ctx_webui *webui)
         webu_mhd_auth_parse(webui);
     }
 
-    if (webui->app->conf->webcontrol_auth_method == "basic") {
+    if (app->conf->webcontrol_auth_method == "basic") {
         return webu_mhd_basic(webui);
-    } else if (webui->app->conf->webcontrol_auth_method == "digest") {
+    } else if (app->conf->webcontrol_auth_method == "digest") {
         return webu_mhd_digest(webui);
     }
 
@@ -642,8 +640,8 @@ static mhdrslt webu_mhd_send(ctx_webui *webui)
         return MHD_NO;
     }
 
-    for (it  = webui->app->webcontrol_headers.params_array.begin();
-         it != webui->app->webcontrol_headers.params_array.end(); it++) {
+    for (it  = app->webcontrol_headers.params_array.begin();
+         it != app->webcontrol_headers.params_array.end(); it++) {
         MHD_add_response_header (response
             , it->param_name.c_str(), it->param_value.c_str());
     }
@@ -681,7 +679,7 @@ static mhdrslt webu_answer_get(ctx_webui *webui)
         webui->resp_page = "<html><head><title>Sample Page</title>"
             "</head><body>Sample Page</body></html>";
         /*
-        if (webui->app->conf->webcontrol_interface == "user") {
+        if (app->conf->webcontrol_interface == "user") {
             webu_html_user(webui);
         } else {
             webu_html_page(webui);
@@ -721,7 +719,7 @@ static mhdrslt webu_answer(void *cls, struct MHD_Connection *connection, const c
         return retcd;
     }
 
-    if (webui->app->webcontrol_finish) {
+    if (app->webcontrol_finish) {
         LOG_MSG(NTC, NO_ERRNO ,"Shutting down channels");
         return MHD_NO;
     }
@@ -767,7 +765,7 @@ static mhdrslt webu_answer(void *cls, struct MHD_Connection *connection, const c
 /* Initialize the MHD answer */
 static void *webu_mhd_init(void *cls, const char *uri, struct MHD_Connection *connection)
 {
-    cls_app *app = (cls_app *)cls;
+    (void)cls;
     ctx_webui *webui;
     int retcd;
 
@@ -777,7 +775,7 @@ static void *webu_mhd_init(void *cls, const char *uri, struct MHD_Connection *co
 
     webui = new ctx_webui;
 
-    webu_context_init(app, webui);
+    webu_context_init(webui);
 
     webui->mhd_first = true;
 
@@ -827,19 +825,20 @@ static void webu_mhd_deinit(void *cls, struct MHD_Connection *connection
 }
 
 /* Validate that the MHD version installed can process basic authentication */
-static void webu_mhd_features_basic(ctx_mhdstart *mhdst)
+static void webu_mhd_features_basic()
 {
     #if MHD_VERSION < 0x00094400
-        (void)mhdst;
+        LOG_MSG(NTC, NO_ERRNO ,"Basic authentication: disabled");
+        app->conf->webcontrol_auth_method = "none";
     #else
         mhdrslt retcd;
         retcd = MHD_is_feature_supported (MHD_FEATURE_BASIC_AUTH);
         if (retcd == MHD_YES) {
             LOG_MSG(DBG, NO_ERRNO ,"Basic authentication: available");
         } else {
-            if (mhdst->app->conf->webcontrol_auth_method == "basic") {
+            if (app->conf->webcontrol_auth_method == "basic") {
                 LOG_MSG(NTC, NO_ERRNO ,"Basic authentication: disabled");
-                mhdst->app->conf->webcontrol_auth_method = "none";
+                app->conf->webcontrol_auth_method = "none";
             } else {
                 LOG_MSG(INF, NO_ERRNO ,"Basic authentication: disabled");
             }
@@ -848,19 +847,20 @@ static void webu_mhd_features_basic(ctx_mhdstart *mhdst)
 }
 
 /* Validate that the MHD version installed can process digest authentication */
-static void webu_mhd_features_digest(ctx_mhdstart *mhdst)
+static void webu_mhd_features_digest()
 {
     #if MHD_VERSION < 0x00094400
-        (void)mhdst;
+        LOG_MSG(NTC, NO_ERRNO ,"Digest authentication: disabled");
+        app->conf->webcontrol_auth_method = "none";
     #else
         mhdrslt retcd;
         retcd = MHD_is_feature_supported (MHD_FEATURE_DIGEST_AUTH);
         if (retcd == MHD_YES) {
             LOG_MSG(DBG, NO_ERRNO ,"Digest authentication: available");
         } else {
-            if (mhdst->app->conf->webcontrol_auth_method == "digest") {
+            if (app->conf->webcontrol_auth_method == "digest") {
                 LOG_MSG(NTC, NO_ERRNO ,"Digest authentication: disabled");
-                mhdst->app->conf->webcontrol_auth_method = "none";
+                app->conf->webcontrol_auth_method = "none";
             } else {
                 LOG_MSG(INF, NO_ERRNO ,"Digest authentication: disabled");
             }
@@ -919,9 +919,9 @@ static void webu_mhd_features_tls(ctx_mhdstart *mhdst)
 /* Validate the features that MHD can support */
 static void webu_mhd_features(ctx_mhdstart *mhdst)
 {
-    webu_mhd_features_basic(mhdst);
+    webu_mhd_features_basic();
 
-    webu_mhd_features_digest(mhdst);
+    webu_mhd_features_digest();
 
     webu_mhd_features_ipv6(mhdst);
 
@@ -969,12 +969,12 @@ static void webu_mhd_checktls(ctx_mhdstart *mhdst)
 {
 
     if (mhdst->tls_use) {
-        if ((mhdst->app->conf->webcontrol_cert == "") || (mhdst->tls_cert == "")) {
+        if ((app->conf->webcontrol_cert == "") || (mhdst->tls_cert == "")) {
             LOG_MSG(NTC, NO_ERRNO
                 ,"SSL/TLS requested but no cert file provided.  SSL/TLS disabled");
             mhdst->tls_use = false;
         }
-        if ((mhdst->app->conf->webcontrol_key == "") || (mhdst->tls_key == "")) {
+        if ((app->conf->webcontrol_key == "") || (mhdst->tls_key == "")) {
             LOG_MSG(NTC, NO_ERRNO
                 ,"SSL/TLS requested but no key file provided.  SSL/TLS disabled");
             mhdst->tls_use = false;
@@ -988,7 +988,7 @@ static void webu_mhd_opts_init(ctx_mhdstart *mhdst)
 {
     mhdst->mhd_ops[mhdst->mhd_opt_nbr].option = MHD_OPTION_URI_LOG_CALLBACK;
     mhdst->mhd_ops[mhdst->mhd_opt_nbr].value = (intptr_t)webu_mhd_init;
-    mhdst->mhd_ops[mhdst->mhd_opt_nbr].ptr_value = mhdst->app;
+    mhdst->mhd_ops[mhdst->mhd_opt_nbr].ptr_value = app;
     mhdst->mhd_opt_nbr++;
 }
 
@@ -1005,11 +1005,11 @@ static void webu_mhd_opts_deinit(ctx_mhdstart *mhdst)
 /* Set the MHD option on acceptable connections */
 static void webu_mhd_opts_localhost(ctx_mhdstart *mhdst)
 {
-    if (mhdst->app->conf->webcontrol_localhost) {
+    if (app->conf->webcontrol_localhost) {
         if (mhdst->ipv6) {
             memset(&mhdst->lpbk_ipv6, 0, sizeof(struct sockaddr_in6));
             mhdst->lpbk_ipv6.sin6_family = AF_INET6;
-            mhdst->lpbk_ipv6.sin6_port = htons((uint16_t)mhdst->app->conf->webcontrol_port);
+            mhdst->lpbk_ipv6.sin6_port = htons((uint16_t)app->conf->webcontrol_port);
             mhdst->lpbk_ipv6.sin6_addr = in6addr_loopback;
 
             mhdst->mhd_ops[mhdst->mhd_opt_nbr].option = MHD_OPTION_SOCK_ADDR;
@@ -1020,7 +1020,7 @@ static void webu_mhd_opts_localhost(ctx_mhdstart *mhdst)
         } else {
             memset(&mhdst->lpbk_ipv4, 0, sizeof(struct sockaddr_in));
             mhdst->lpbk_ipv4.sin_family = AF_INET;
-            mhdst->lpbk_ipv4.sin_port = htons((uint16_t)mhdst->app->conf->webcontrol_port);
+            mhdst->lpbk_ipv4.sin_port = htons((uint16_t)app->conf->webcontrol_port);
             mhdst->lpbk_ipv4.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 
             mhdst->mhd_ops[mhdst->mhd_opt_nbr].option = MHD_OPTION_SOCK_ADDR;
@@ -1035,11 +1035,11 @@ static void webu_mhd_opts_localhost(ctx_mhdstart *mhdst)
 /* Set the mhd digest options */
 static void webu_mhd_opts_digest(ctx_mhdstart *mhdst)
 {
-    if (mhdst->app->conf->webcontrol_auth_method == "digest") {
+    if (app->conf->webcontrol_auth_method == "digest") {
 
         mhdst->mhd_ops[mhdst->mhd_opt_nbr].option = MHD_OPTION_DIGEST_AUTH_RANDOM;
-        mhdst->mhd_ops[mhdst->mhd_opt_nbr].value = sizeof(mhdst->app->webcontrol_digest_rand);
-        mhdst->mhd_ops[mhdst->mhd_opt_nbr].ptr_value = mhdst->app->webcontrol_digest_rand;
+        mhdst->mhd_ops[mhdst->mhd_opt_nbr].value = sizeof(app->webcontrol_digest_rand);
+        mhdst->mhd_ops[mhdst->mhd_opt_nbr].ptr_value = app->webcontrol_digest_rand;
         mhdst->mhd_opt_nbr++;
 
         mhdst->mhd_ops[mhdst->mhd_opt_nbr].option = MHD_OPTION_NONCE_NC_SIZE;
@@ -1113,7 +1113,7 @@ static void webu_mhd_flags(ctx_mhdstart *mhdst)
 }
 
 /* Start the webcontrol */
-static void webu_init_webcontrol(cls_app *app)
+static void webu_init_webcontrol()
 {
     ctx_mhdstart mhdst;
     unsigned int randnbr;
@@ -1128,7 +1128,6 @@ static void webu_init_webcontrol(cls_app *app)
 
     mhdst.tls_cert = webu_mhd_loadfile(app->conf->webcontrol_cert);
     mhdst.tls_key  = webu_mhd_loadfile(app->conf->webcontrol_key);
-    mhdst.app = app;
     mhdst.ipv6 = app->conf->webcontrol_ipv6;
     mhdst.tls_use = app->conf->webcontrol_tls;
 
@@ -1162,7 +1161,7 @@ static void webu_init_webcontrol(cls_app *app)
 }
 
 /* Shut down the webcontrol */
-void webu_deinit(cls_app *app)
+void webu_deinit()
 {
     if (app->webcontrol_daemon != NULL) {
         LOG_MSG(DBG, NO_ERRNO,"Closing");
@@ -1172,12 +1171,12 @@ void webu_deinit(cls_app *app)
 }
 
 /* Start the webcontrol and streams */
-void webu_init(cls_app *app)
+void webu_init()
 {
     app->webcontrol_daemon = NULL;
     app->webcontrol_finish = false;
 
     if (app->conf->webcontrol_port != 0 ) {
-        webu_init_webcontrol(app);
+        webu_init_webcontrol();
     }
 }

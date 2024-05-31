@@ -24,9 +24,9 @@
 #include "infile.hpp"
 #include "webu.hpp"
 
-bool finish;
+cls_app *app;
 
-void signal_handler(int signo)
+static void signal_handler(int signo)
 {
     switch(signo) {
     case SIGALRM:
@@ -34,7 +34,7 @@ void signal_handler(int signo)
         break;
     case SIGINT:
         fprintf(stderr, "Caught interrupt signal.\n");
-        finish = true;
+        app->finish = true;
         break;
     case SIGABRT:
         fprintf(stderr, "Caught abort signal.\n");
@@ -60,7 +60,7 @@ void signal_handler(int signo)
     }
 }
 
-void signal_setup()
+void cls_app::signal_setup()
 {
     if (signal(SIGPIPE,   signal_handler) == SIG_ERR)  fprintf(stderr, "Can not catch pipe signal.\n");
     if (signal(SIGALRM,   signal_handler) == SIG_ERR)  fprintf(stderr, "Can not catch alarm signal.\n");
@@ -162,13 +162,12 @@ void channel_process_setup(ctx_channel_item *chitm)
             chitm->ch_sort = it->param_value;
         }
         if (it->param_name == "tvhguide") {
-            conf_edit_set_bool(chitm->ch_tvhguide, it->param_value);
+            app->conf->parm_set_bool(chitm->ch_tvhguide, it->param_value);
         }
         if (it->param_name == "enc") {
             chitm->ch_encode = it->param_value;
         }
     }
-
 }
 
 void channel_process_defaults(ctx_channel_item *chitm)
@@ -186,7 +185,7 @@ void channel_process_defaults(ctx_channel_item *chitm)
     chitm->pktarray_start = 0;
 }
 
-void channel_process(cls_app *app, int chindx)
+void channel_process(int chindx)
 {
     ctx_channel_item *chitm = &app->channels[chindx];
     int indx;
@@ -248,7 +247,7 @@ void channel_process(cls_app *app, int chindx)
     LOG_MSG(NTC, NO_ERRNO, "Ch%s: Finished",chitm->ch_nbr.c_str());
 }
 
-void channels_init(cls_app *app)
+void channels_init()
 {
     int indx;
     ctx_channel_item chitm;
@@ -266,16 +265,15 @@ void channels_init(cls_app *app)
 
     for (indx=0; indx < app->ch_count; indx++) {
         app->channels[indx].ch_index = indx;
-        ch_thread = std::thread(channel_process, app, indx);
+        ch_thread = std::thread(channel_process, indx);
         ch_thread.detach();
     }
     if (app->ch_count == 0) {
         LOG_MSG(NTC, NO_ERRNO,"Configuration file lacks channel parameters");
     }
-
 }
 
-void channels_wait(cls_app *app)
+void channels_wait()
 {
     int ch_count, indx, chk;
 
@@ -283,7 +281,7 @@ void channels_wait(cls_app *app)
     chk = 0;
     while (ch_count != 0){
         sleep(1);
-        if (finish) {
+        if (app->finish) {
             LOG_MSG(NTC, NO_ERRNO,"Closing web interface connections");
             app->webcontrol_finish = true;
             chk = 0;
@@ -362,30 +360,23 @@ void logger(void *var1, int errnbr, const char *fmt, va_list vlist)
 
 }
 
-int main(int argc, char **argv){
-
-    cls_app *app;
-
-    finish = false;
-
-    app = new cls_app(argc, argv);
-
+int main(int argc, char **argv)
+{
     mythreadname_set(nullptr,1,"main");
 
-    signal_setup();
-    conf_init(app);
-    log_init(app);
-    conf_parms_log(app);
+    app = new cls_app(argc, argv);
+    app->conf = new cls_config();
 
-    av_log_set_callback(logger);
+    log_init();
+    app->conf->parms_log();
 
-    channels_init(app);
+    channels_init();
 
-    webu_init(app);
+    webu_init();
 
-    channels_wait(app);
+    channels_wait();
 
-    webu_deinit(app);
+    webu_deinit();
 
     delete app;
 
@@ -396,12 +387,16 @@ cls_app::cls_app(int p_argc, char **p_argv)
 {
     argc = p_argc;
     argv = p_argv;
-    conf = new ctx_config;
+
+    finish = false;
+
+    signal_setup();
+
+    av_log_set_callback(logger);
 
 }
 
 cls_app::~cls_app()
 {
     delete conf;
-
 }
