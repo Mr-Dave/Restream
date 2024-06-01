@@ -190,7 +190,7 @@ void channel_process(int chindx)
     ctx_channel_item *chitm = &app->channels[chindx];
     int indx;
 
-    LOG_MSG(NTC, NO_ERRNO, "Ch%s: Starting",chitm->ch_nbr.c_str());
+    LOG_MSG(NTC, NO_ERRNO, "Starting channel");
 
     channel_process_setup(chitm);
 
@@ -365,9 +365,8 @@ int main(int argc, char **argv)
     mythreadname_set(nullptr,1,"main");
 
     app = new cls_app(argc, argv);
+    app->log = new cls_log();
     app->conf = new cls_config();
-
-    log_init();
     app->conf->parms_log();
 
     channels_init();
@@ -399,4 +398,5 @@ cls_app::cls_app(int p_argc, char **p_argv)
 cls_app::~cls_app()
 {
     delete conf;
+    delete log;
 }

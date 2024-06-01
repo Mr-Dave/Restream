@@ -47,6 +47,9 @@
             void parms_log();
 
         private:
+            std::string     cmd_log_file;
+            std::string     cmd_log_level;
+
             void parm_get_bool(std::string &parm_dest, bool &parm_in);
             void edit_log_file(std::string &parm, enum PARM_ACT pact);
             void edit_log_level(std::string &parm, enum PARM_ACT pact);

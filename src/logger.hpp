@@ -19,15 +19,13 @@
 #ifndef _INCLUDE_LOGGER_HPP_
 #define _INCLUDE_LOGGER_HPP_
 
-    /* Logging mode */
     #define LOGMODE_NONE            0   /* No logging             */
     #define LOGMODE_FILE            1   /* Log messages to file   */
     #define LOGMODE_SYSLOG          2   /* Log messages to syslog */
 
-    #define NO_ERRNO                0   /* Flag to avoid how message associated to errno */
-    #define SHOW_ERRNO              1   /* Flag to show message associated to errno */
+    #define NO_ERRNO                0   /* Do not display system error message */
+    #define SHOW_ERRNO              1   /* Display the system error message */
 
-    /* Log levels */
     #define LOG_ALL                 9
     #define EMG                     1
     #define ALR                     2
@@ -40,12 +38,30 @@
     #define ALL                     9
     #define LEVEL_DEFAULT           ALL
 
-    #define LOG_MSG(x, z, format, args...) log_msg(x, z, true, format, __FUNCTION__, ##args)
+    #define LOG_MSG(x, z, format, args...) app->log->write_msg(x, z, true, format, __FUNCTION__, ##args)
+    #define SHT_MSG(x, z, format, args...) app->log->write_msg(x, z, false, format, ##args)
 
-    void log_msg(int loglvl, int flgerr, bool flgfnc, const char *fmt, ...);
+    class cls_log {
+        public:
+            cls_log();
+            ~cls_log();
+            int             log_level;
+            void set_log_file(std::string pname);
+            void write_msg(int loglvl, int flgerr, bool flgfnc, const char *fmt, ...);
+        private:
+            pthread_mutex_t     mtx_log;
+            int                 log_mode;
+            FILE                *log_file_ptr;
+            std::string         log_file_name;
+            char                msg_prefix[512];
+            char                msg_flood[1024];
+            char                msg_full[1024];
+            int                 flood_cnt;
+            void set_mode(int mode);
+            void write_flood(int loglvl);
+            void write_norm(int loglvl, int prefixlen);
+            void add_errmsg(int flgerr, int err_save);
 
-    void log_init();
-    void log_deinit();
-    void log_set_level(int new_level);
+    };
 
 #endif /* _INCLUDE_LOGGER_HPP_ */

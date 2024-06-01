@@ -37,6 +37,8 @@
     #include <microhttpd.h>
     #include <stdio.h>
     #include <stdlib.h>
+    #include <stdarg.h>
+    #include <syslog.h>
     #include <dirent.h>
     #include <errno.h>
     #include <sys/types.h>
@@ -56,6 +58,7 @@
     #include <mutex>
 
     class cls_config;
+    class cls_log;
     class cls_app;
 
     extern cls_app *app;
@@ -208,9 +211,9 @@
             bool finish;
 
             cls_config  *conf;
+            cls_log     *log;
+
             std::string     conf_file;
-            std::string     log_file;
-            int             log_level;
 
             std::vector<ctx_channel_item>    channels;
             int         ch_count;

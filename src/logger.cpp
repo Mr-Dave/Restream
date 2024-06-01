@@ -16,9 +16,6 @@
  *
  */
 
-#include <stdarg.h>
-#include <syslog.h>
-
 #include "restream.hpp"
 #include "conf.hpp"
 #include "util.hpp"
@@ -27,203 +24,212 @@
 #include "infile.hpp"
 #include "webu.hpp"
 
-static int log_mode = LOGMODE_SYSLOG;
-static FILE *logfile  = NULL;
-static int log_level = LEVEL_DEFAULT;
+const char *log_level_str[] = {NULL, "EMG", "ALR", "CRT", "ERR", "WRN", "NTC", "INF", "DBG", "ALL"};
 
-static const char *log_level_str[] = {NULL, "EMG", "ALR", "CRT", "ERR", "WRN", "NTC", "INF", "DBG", "ALL"};
-
-/** Sets mode of logging, could be using syslog or files. */
-static void log_set_mode(int mode)
+void cls_log::write_flood(int loglvl)
 {
-    int prev_mode = log_mode;
-
-    log_mode = mode;
-
-    if (mode == LOGMODE_SYSLOG && prev_mode != LOGMODE_SYSLOG) {
-        openlog("restream", LOG_PID, LOG_USER);
-    }
-
-    if (mode != LOGMODE_SYSLOG && prev_mode == LOGMODE_SYSLOG) {
-        closelog();
-    }
-}
-
-/** Sets logfile to be used instead of syslog. */
-static void log_set_logfile(const char *logfile_name)
-{
-    log_set_mode(LOGMODE_SYSLOG);
-
-    logfile = myfopen(logfile_name, "ae");
-
-    /* If logfile was opened correctly */
-    if (logfile) {
-        log_set_mode(LOGMODE_FILE);
-    }
-}
-
-/** Return string with human readable time */
-static char *log_time(void)
-{
-    static char buffer[16];
-    time_t now = 0;
-
-    now = time(0);
-    strftime(buffer, 16, "%b %d %H:%M:%S", localtime(&now));
-    return buffer;
-}
-
-/* Print log message*/
-void log_msg(int loglvl, int flgerr, bool flgfnc, const char *fmt, ...)
-{
-
-    int err_save, n, prefixlen;
-    size_t buf_len;
-
-    char buf[1024]= {0};
-    char usrfmt[1024]= {0};
-    char err_buf[100]= {0};
     char flood_repeats[1024];
-    char threadname[32];
 
-    static int flood_cnt = 0;
-    static char flood_msg[1024];
-    static char prefix_msg[512];
-
-    va_list ap;
-
-    if (loglvl > log_level) {
+    if (app->log->flood_cnt <= 1) {
         return;
     }
+
+    snprintf(flood_repeats, sizeof(flood_repeats)
+        , "%s Above message repeats %d times\n"
+        , app->log->msg_prefix, app->log->flood_cnt-1);
+
+    if (app->log->log_mode == LOGMODE_FILE) {
+        fputs(flood_repeats, app->log->log_file_ptr);
+        fflush(app->log->log_file_ptr);
+
+    } else {    /* The syslog level values are one less*/
+        syslog(loglvl-1, "%s", flood_repeats);
+        fputs(flood_repeats, stderr);
+        fflush(stderr);
+    }
+}
+
+void cls_log::write_norm(int loglvl, int prefixlen)
+{
+    app->log->flood_cnt = 1;
+
+    snprintf(app->log->msg_flood
+        , sizeof(app->log->msg_flood), "%s"
+        , &app->log->msg_full[16]);
+
+    snprintf(app->log->msg_prefix, prefixlen, "%s", app->log->msg_full);
+
+    if (app->log->log_mode == LOGMODE_FILE) {
+        strcpy(app->log->msg_full +
+            strlen(app->log->msg_full),"\n");
+        fputs(app->log->msg_full, app->log->log_file_ptr);
+        fflush(app->log->log_file_ptr);
+
+    } else {
+        syslog(loglvl-1, "%s", app->log->msg_full);
+        strcpy(app->log->msg_full +
+            strlen(app->log->msg_full),"\n");
+        fputs(app->log->msg_full, stderr);
+        fflush(stderr);
+
+    }
+}
+
+void cls_log::add_errmsg(int flgerr, int err_save)
+{
+    int errsz, msgsz;
+    char err_buf[90];
+
+    if (flgerr == NO_ERRNO) {
+        return;
+    }
+
+    memset(err_buf, 0, sizeof(err_buf));
+    strerror_r(err_save, err_buf, sizeof(err_buf));
+    errsz = strlen(err_buf);
+    msgsz = strlen(app->log->msg_full);
+
+    if ((msgsz+errsz+2) >= (int)sizeof(app->log->msg_full)) {
+        msgsz = msgsz-errsz-2;
+        memset(app->log->msg_full+msgsz, 0, sizeof(app->log->msg_full) - msgsz);
+    }
+    strcpy(app->log->msg_full+msgsz,": ");
+    memcpy(app->log->msg_full+msgsz + 2, err_buf, errsz);
+
+}
+
+void cls_log::set_mode(int mode_new)
+{
+    if ((log_mode != LOGMODE_SYSLOG) && (mode_new == LOGMODE_SYSLOG)) {
+        openlog("restream", LOG_PID, LOG_USER);
+    }
+    if ((log_mode == LOGMODE_SYSLOG) && (mode_new != LOGMODE_SYSLOG)) {
+        closelog();
+    }
+    log_mode = mode_new;
+}
+
+void cls_log::set_log_file(std::string pname)
+{
+    if ((pname == "") || (pname == "syslog")) {
+        if (log_file_ptr != nullptr) {
+            myfclose(log_file_ptr);
+            log_file_ptr = nullptr;
+        }
+        if (log_file_name == "") {
+            LOG_MSG(NTC, NO_ERRNO, "Logging to syslog");
+            set_mode(LOGMODE_SYSLOG);
+            log_file_name == "syslog";
+        }
+
+    } else if ((pname != log_file_name) || (log_file_ptr == nullptr)) {
+        if (log_file_ptr != nullptr) {
+            myfclose(log_file_ptr);
+            log_file_ptr = nullptr;
+        }
+        log_file_ptr = myfopen(pname.c_str(), "ae");
+        if (log_file_ptr != nullptr) {
+            log_file_name = pname;
+            set_mode(LOGMODE_SYSLOG);
+            LOG_MSG(NTC, NO_ERRNO, "Logging to file (%s)"
+                , app->conf->log_file.c_str());
+            set_mode(LOGMODE_FILE);
+        } else {
+            log_file_name = "syslog";
+            set_mode(LOGMODE_SYSLOG);
+            LOG_MSG(EMG, SHOW_ERRNO, "Cannot create log file %s"
+                , app->conf->log_file.c_str());
+        }
+    }
+}
+
+cls_log::cls_log()
+{
+    log_mode = LOGMODE_NONE;
+    log_level = LEVEL_DEFAULT;
+    log_file_ptr  = nullptr;
+    log_file_name = "";
+    set_mode(LOGMODE_SYSLOG);
+    pthread_mutex_init(&mtx_log, NULL);
+
+}
+
+cls_log::~cls_log()
+{
+    if (log_file_ptr != nullptr) {
+        LOG_MSG(NTC, NO_ERRNO, "Closing log_file (%s)."
+            , app->conf->log_file.c_str());
+        myfclose(log_file_ptr);
+        log_file_ptr = nullptr;
+    }
+    pthread_mutex_destroy(&mtx_log);
+}
+
+void cls_log::write_msg(int loglvl, int flgerr, bool flgfnc, const char *fmt, ...)
+{
+    int err_save, n, prefixlen;
+    char usrfmt[1024];
+    char msg_time[16];
+    char threadname[32];
+    va_list ap;
+    time_t now;
+
+    if (loglvl > app->log->log_level) {
+        return;
+    }
+
+    pthread_mutex_lock(&app->log->mtx_log);
+
     err_save = errno;
+    memset(app->log->msg_full, 0, sizeof(app->log->msg_full));
+    memset(usrfmt, 0, sizeof(usrfmt));
 
     mythreadname_get(threadname);
-    /* Add time/level/threadname */
-    n = snprintf(buf, sizeof(buf), "%s [%s][%s] "
-        , log_time(), log_level_str[loglvl], threadname );
+
+    now = time(NULL);
+    strftime(msg_time, sizeof(msg_time)
+        , "%b %d %H:%M:%S", localtime(&now));
+
+    n = snprintf(app->log->msg_full
+        , sizeof(app->log->msg_full)
+        , "%s [%s][%s] ", msg_time
+        , log_level_str[loglvl], threadname );
     prefixlen = n;
 
-    /* Add format specifier for function name*/
     if (flgfnc) {
         va_start(ap, fmt);
-            prefixlen += snprintf(usrfmt, sizeof(usrfmt),"%s: ", va_arg(ap, char *));
+            prefixlen += snprintf(usrfmt, sizeof(usrfmt)
+                , "%s: ", va_arg(ap, char *));
         va_end(ap);
         snprintf(usrfmt, sizeof (usrfmt),"%s: %s", "%s", fmt);
     } else {
         snprintf(usrfmt, sizeof (usrfmt),"%s",fmt);
     }
 
-    /* Add user message*/
     va_start(ap, fmt);
-        n += vsnprintf(buf + n, sizeof(buf) - n, usrfmt, ap);
+        n += vsnprintf(
+            app->log->msg_full + n
+            , sizeof(app->log->msg_full)-n-1
+            , usrfmt, ap);
     va_end(ap);
-    buf[1023] = '\0';
 
-    /* If error flag is set, add on the library error message. */
-    if (flgerr) {
-        buf_len = strlen(buf);
-        // just knock off 10 characters if we're that close...
-        if (buf_len + 10 > 1024) {
-            buf[1024 - 10] = '\0';
-            buf_len = 1024 - 10;
-        }
+    app->log->add_errmsg(flgerr, err_save);
 
-        strncat(buf, ": ", 1024 - buf_len);
-        n += 2;
-        strncat(buf
-            , strerror_r(err_save, err_buf, sizeof(err_buf))
-            , 1024 - strlen(buf));
-    }
-
-    if ((mystreq(&buf[16], flood_msg)) && (flood_cnt <= 5000)) {
-        flood_cnt++;
+    /*
+      Compare the part of the message that is
+      after the message time (time is 16 bytes)
+    */
+    if ((app->log->flood_cnt <= 5000) &&
+        mystreq(app->log->msg_flood, &app->log->msg_full[16])) {
+        app->log->flood_cnt++;
+        pthread_mutex_unlock(&app->log->mtx_log);
         return;
     }
 
-    if (flood_cnt > 1) {
-        snprintf(flood_repeats, 1024
-            , "%s Above message repeats %d times"
-            , prefix_msg, flood_cnt-1);
-        switch (log_mode) {
-        case LOGMODE_FILE:
-            strncat(flood_repeats, "\n", 1024 - strlen(flood_repeats));
-            fputs(flood_repeats, logfile);
-            fflush(logfile);
-            break;
-        case LOGMODE_SYSLOG:
-            /* The syslog level values are one less*/
-            syslog(loglvl-1, "%s", flood_repeats);
-            strncat(flood_repeats, "\n", 1024 - strlen(flood_repeats));
-            fputs(flood_repeats, stderr);
-            fflush(stderr);
-            break;
-        }
-    }
+    app->log->write_flood(loglvl);
 
-    flood_cnt = 1;
-    snprintf(flood_msg, 1024, "%s", &buf[16]);
-    snprintf(prefix_msg, prefixlen, "%s", buf);
-    switch (log_mode) {
-    case LOGMODE_FILE:
-        strncat(buf, "\n", 1024 - strlen(buf));
-        fputs(buf, logfile);
-        fflush(logfile);
-        break;
-    case LOGMODE_SYSLOG:
-        syslog(loglvl-1, "%s", buf);
-        strncat(buf, "\n", 1024 - strlen(buf));
-        fputs(buf, stderr);
-        fflush(stderr);
-        break;
-    }
+    app->log->write_norm(loglvl, prefixlen);
 
-}
+    pthread_mutex_unlock(&app->log->mtx_log);
 
-void log_init()
-{
-    if ((app->conf->log_level > ALL) ||
-        (app->conf->log_level == 0)) {
-        app->conf->log_level = LEVEL_DEFAULT;
-        LOG_MSG(NTC, NO_ERRNO
-            ,"Using default log level (%s) (%d)"
-            ,log_level_str[app->conf->log_level]
-            ,app->conf->log_level);
-    }
-
-    if (app->conf->log_file != "") {
-        if (app->conf->log_file != "syslog") {
-            log_set_mode(LOGMODE_FILE);
-            log_set_logfile(app->conf->log_file.c_str());
-            if (logfile) {
-                log_set_mode(LOGMODE_SYSLOG);
-                LOG_MSG(NTC, NO_ERRNO
-                    , "Logging to file (%s)"
-                    , app->conf->log_file.c_str());
-                log_set_mode(LOGMODE_FILE);
-            } else {
-                LOG_MSG(EMG, SHOW_ERRNO
-                    , "Exit.  Cannot create log file %s"
-                    , app->conf->log_file.c_str());
-                exit(0);
-            }
-        } else {
-            LOG_MSG(NTC, NO_ERRNO, "Logging to syslog");
-        }
-    } else {
-        LOG_MSG(NTC, NO_ERRNO, "Logging to syslog");
-    }
-
-    log_level = app->conf->log_level;
-}
-
-void log_deinit()
-{
-    if (logfile != NULL) {
-        LOG_MSG(NTC, NO_ERRNO
-            , "Closing logfile (%s)."
-            , app->conf->log_file.c_str());
-        myfclose(logfile);
-        log_set_mode(LOGMODE_NONE);
-        logfile = NULL;
-    }
 }

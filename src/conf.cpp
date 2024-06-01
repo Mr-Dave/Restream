@@ -516,7 +516,6 @@ void cls_config::usage()
     printf("\n");
 }
 
-/** Process Command-line options specified */
 void cls_config::process_cmdline()
 {
     int c;
@@ -527,10 +526,10 @@ void cls_config::process_cmdline()
             app->conf_file.assign(optarg);
             break;
         case 'd':
-            app->log_level= atoi(optarg);
+            cmd_log_level.assign(optarg);
             break;
         case 'l':
-            app->log_file.assign(optarg);
+            cmd_log_file.assign(optarg);
             break;
         case 'h':
         case '?':
@@ -602,7 +601,7 @@ void cls_config::parms_log()
     std::list<std::string>::iterator it;
     std::vector<ctx_config_item>::iterator cfg_it;
 
-    log_msg(INF, NO_ERRNO,false
+    SHT_MSG(INF, NO_ERRNO
         ,"Logging parameters from config file: %s"
         , app->conf_file.c_str());
 
@@ -611,12 +610,12 @@ void cls_config::parms_log()
         if (cfg_it->parm_type == PARM_TYP_ARRAY) {
             parm_get(cfg_it->parm_name, parm_array, cfg_it->parm_cat);
             for (it = parm_array.begin(); it != parm_array.end(); it++) {
-                log_msg(INF, NO_ERRNO, false, "%-25s %s"
+                SHT_MSG(INF, NO_ERRNO, "%-25s %s"
                     , cfg_it->parm_name.c_str(), it->c_str());
             }
         } else {
             parm_get(cfg_it->parm_name, parm_vl, cfg_it->parm_cat);
-            log_msg(INF, NO_ERRNO,false, "%-25s %s"
+            SHT_MSG(INF, NO_ERRNO,"%-25s %s"
                 , cfg_it->parm_name.c_str(), parm_vl.c_str());
         }
     }
@@ -723,6 +722,9 @@ void cls_config::parms_add(std::string pname, enum PARM_TYP ptyp
 
 void cls_config::parms_init()
 {
+    cmd_log_file = "";
+    cmd_log_level = "";
+
     parms_add("log_file",                  PARM_TYP_STRING, PARM_CAT_00, WEBUI_LEVEL_ADVANCED);
     parms_add("log_level",                 PARM_TYP_LIST,   PARM_CAT_00, WEBUI_LEVEL_LIMITED);
     parms_add("webcontrol_port",           PARM_TYP_INT,    PARM_CAT_01, WEBUI_LEVEL_ADVANCED);
@@ -798,6 +800,15 @@ cls_config::cls_config()
 
     process_file();
 
+    if (cmd_log_file != "") {
+        edit_log_file(cmd_log_file, PARM_ACT_SET);
+    }
+
+    if (cmd_log_level != "") {
+        edit_log_level(cmd_log_level, PARM_ACT_SET);
+    }
+    app->log->log_level = log_level;
+    app->log->set_log_file(log_file);
 }
 
 cls_config::~cls_config()
