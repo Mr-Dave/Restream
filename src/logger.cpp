@@ -20,7 +20,7 @@
 #include "conf.hpp"
 #include "util.hpp"
 #include "logger.hpp"
-#include "guide.hpp"
+#include "channel.hpp"
 #include "infile.hpp"
 #include "webu.hpp"
 
@@ -43,7 +43,7 @@ void cls_log::write_flood(int loglvl)
         fflush(app->log->log_file_ptr);
 
     } else {    /* The syslog level values are one less*/
-        syslog(loglvl-1, "%s", flood_repeats);
+        syslog(loglvl, "%s", flood_repeats);
         fputs(flood_repeats, stderr);
         fflush(stderr);
     }
@@ -117,9 +117,9 @@ void cls_log::set_log_file(std::string pname)
             log_file_ptr = nullptr;
         }
         if (log_file_name == "") {
-            LOG_MSG(NTC, NO_ERRNO, "Logging to syslog");
             set_mode(LOGMODE_SYSLOG);
             log_file_name == "syslog";
+            LOG_MSG(NTC, NO_ERRNO, "Logging to syslog");
         }
 
     } else if ((pname != log_file_name) || (log_file_ptr == nullptr)) {

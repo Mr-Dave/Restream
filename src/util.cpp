@@ -21,7 +21,7 @@
 #include "conf.hpp"
 #include "util.hpp"
 #include "logger.hpp"
-#include "guide.hpp"
+#include "channel.hpp"
 #include "infile.hpp"
 #include "webu.hpp"
 

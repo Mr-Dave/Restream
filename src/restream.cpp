@@ -20,7 +20,7 @@
 #include "conf.hpp"
 #include "util.hpp"
 #include "logger.hpp"
-#include "guide.hpp"
+#include "channel.hpp"
 #include "infile.hpp"
 #include "webu.hpp"
 
@@ -72,200 +72,23 @@ void cls_app::signal_setup()
     if (signal(SIGINT,    signal_handler) == SIG_ERR)  fprintf(stderr, "Can not catch VTalarm\n");
 }
 
-bool playlist_cmp(const ctx_playlist_item& a, const ctx_playlist_item& b)
-{
-/*
-    if (a.fullnm < b.fullnm) {
-        LOG_MSG(NTC, NO_ERRNO
-            ,"less %s %s", a.fullnm, b.fullnm);
-    } else {
-        LOG_MSG(NTC, NO_ERRNO
-            ,"greater %s %s", a.fullnm, b.fullnm);
-    }
-*/
-    return a.fullnm < b.fullnm;
-}
-
-void playlist_loaddir(ctx_channel_item *chitm)
-{
-    DIR           *d;
-    struct dirent *dir;
-    ctx_playlist_item playitm;
-
-    chitm->playlist_count = 0;
-    chitm->playlist.clear();
-
-    if (chitm->ch_finish == true) {
-        return;
-    }
-
-    d = opendir(chitm->ch_dir.c_str());
-    if (d) {
-        while ((dir=readdir(d)) != NULL){
-            if ((strstr(dir->d_name,".mkv") != NULL) || (strstr(dir->d_name,".mp4") != NULL)) {
-                chitm->playlist_count++;
-                playitm.fullnm = chitm->ch_dir;
-                playitm.fullnm += dir->d_name;
-                playitm.filenm = dir->d_name;
-                playitm.displaynm = playitm.filenm.substr(
-                    0, playitm.filenm.find_last_of("."));
-                chitm->playlist.push_back(playitm);
-                }
-            }
-    }
-    closedir(d);
-
-    if (chitm->ch_sort == "alpha") {
-        std::sort(chitm->playlist.begin(), chitm->playlist.end(), playlist_cmp);
-    } else {
-        std::random_shuffle(chitm->playlist.begin(), chitm->playlist.end());
-    }
-}
-
-void channel_process_setup(ctx_channel_item *chitm)
-{
-    std::list<ctx_params_item>::iterator    it;
-
-    chitm->ch_finish = false;
-    chitm->ch_dir = "";
-    chitm->ch_nbr = "";
-    chitm->ch_sort = "";
-    chitm->ch_running = true;
-    chitm->ch_tvhguide = true;
-    chitm->ch_encode = "";
-    chitm->frame = nullptr;
-    chitm->pktnbr = 0;
-    chitm->pktarray_count = 0;
-    chitm->pktarray_index = -1;
-    chitm->pkt_in = nullptr;
-    chitm->cnct_cnt = 0;
-    chitm->file_cnt = 0;
-    chitm->fifo = nullptr;
-
-    pthread_mutex_init(&chitm->mtx_ifmt, NULL);
-    pthread_mutex_init(&chitm->mtx_pktarray, NULL);
-
-    util_parms_parse(
-        chitm->ch_params
-        , "Ch"+std::to_string(chitm->ch_index)
-        , chitm->ch_conf);
-
-    for (it  = chitm->ch_params.params_array.begin();
-         it != chitm->ch_params.params_array.end(); it++) {
-        if (it->param_name == "dir") {
-            chitm->ch_dir = it->param_value;
-        }
-        if (it->param_name == "ch") {
-            chitm->ch_nbr = it->param_value;
-        }
-        if (it->param_name == "sort") {
-            chitm->ch_sort = it->param_value;
-        }
-        if (it->param_name == "tvhguide") {
-            app->conf->parm_set_bool(chitm->ch_tvhguide, it->param_value);
-        }
-        if (it->param_name == "enc") {
-            chitm->ch_encode = it->param_value;
-        }
-    }
-}
-
-void channel_process_defaults(ctx_channel_item *chitm)
-{
-    chitm->ifile.audio.index = -1;
-    chitm->ifile.audio.last_pts = -1;
-    chitm->ifile.audio.start_pts = -1;
-    chitm->ifile.audio.codec_ctx = nullptr;
-    chitm->ifile.audio.strm = nullptr;
-    chitm->ifile.audio.base_pdts = 0;
-    chitm->ifile.video = chitm->ifile.audio;
-    chitm->ifile.fmt_ctx = nullptr;
-    chitm->ifile.time_start = -1;
-    chitm->ofile = chitm->ifile;
-    chitm->pktarray_start = 0;
-}
-
-void channel_process(int chindx)
-{
-    ctx_channel_item *chitm = &app->channels[chindx];
-    int indx;
-
-    LOG_MSG(NTC, NO_ERRNO, "Starting channel");
-
-    channel_process_setup(chitm);
-
-    pthread_mutex_lock(&chitm->mtx_ifmt);
-
-    while (chitm->ch_finish == false) {
-        playlist_loaddir(chitm);
-        for (indx=0; indx < chitm->playlist_count; indx++) {
-            LOG_MSG(NTC, NO_ERRNO
-                , "Ch%s: Playing: %s"
-                , chitm->ch_nbr.c_str()
-                , chitm->playlist[indx].filenm.c_str());
-            chitm->playlist_index = indx;
-            if (chitm->ch_tvhguide == true) {
-                guide_process(chitm);
-            }
-            channel_process_defaults(chitm);
-            if (decoder_init(chitm) != 0) {
-                continue;
-            }
-            if (encoder_init(chitm) != 0) {
-                continue;
-            }
-            if (decoder_get_ts(chitm) != 0) {
-                continue;
-            }
-
-            pthread_mutex_unlock(&chitm->mtx_ifmt);
-            infile_read(chitm);
-            pthread_mutex_lock(&chitm->mtx_ifmt);
-            streams_close(chitm);
-            if (chitm->ch_finish == true) {
-                break;
-            }
-        }
-    }
-
-    streams_close(chitm);
-
-    for (indx=0; indx < (int)chitm->pktarray.size(); indx++) {
-        if (chitm->pktarray[indx].packet != nullptr) {
-            mypacket_free(chitm->pktarray[indx].packet);
-            chitm->pktarray[indx].packet = nullptr;
-        }
-    }
-
-    chitm->pktarray.clear();
-    chitm->pktarray_count = 0;
-
-    pthread_mutex_destroy(&chitm->mtx_ifmt);
-    pthread_mutex_destroy(&chitm->mtx_pktarray);
-
-    chitm->ch_running = false;
-    LOG_MSG(NTC, NO_ERRNO, "Ch%s: Finished",chitm->ch_nbr.c_str());
-}
-
-void channels_init()
+void cls_app::channels_start()
 {
     int indx;
-    ctx_channel_item chitm;
+    cls_channel *chitm;
     std::list<std::string>::iterator    it;
     std::thread ch_thread;
 
     app->ch_count = 0;
     for (it  = app->conf->channels.begin();
          it != app->conf->channels.end(); it++) {
-        app->ch_count++;
-        chitm.ch_conf = it->c_str();
-        chitm.app = app;
+        chitm = new cls_channel(app->ch_count, it->c_str());
         app->channels.push_back(chitm);
+        app->ch_count++;
     }
 
     for (indx=0; indx < app->ch_count; indx++) {
-        app->channels[indx].ch_index = indx;
-        ch_thread = std::thread(channel_process, indx);
+        ch_thread = std::thread(&cls_channel::process, app->channels[indx]);
         ch_thread.detach();
     }
     if (app->ch_count == 0) {
@@ -273,25 +96,25 @@ void channels_init()
     }
 }
 
-void channels_wait()
+void cls_app::channels_wait()
 {
-    int ch_count, indx, chk;
+    int p_count, indx, chk;
 
-    ch_count = app->ch_count;
+    p_count = app->ch_count;
     chk = 0;
-    while (ch_count != 0){
+    while (p_count != 0){
         sleep(1);
         if (app->finish) {
             LOG_MSG(NTC, NO_ERRNO,"Closing web interface connections");
             app->webcontrol_finish = true;
             chk = 0;
-            ch_count = 1;
-            while ((chk < 5) && (ch_count > 0)) {
-                ch_count = 0;
+            p_count = 1;
+            while ((chk < 5) && (p_count > 0)) {
+                p_count = 0;
                 for (indx=0; indx < app->ch_count; indx++) {
-                    ch_count += app->channels[indx].cnct_cnt;
+                    p_count += app->channels[indx]->cnct_cnt;
                 }
-                if (ch_count > 0) {
+                if (p_count > 0) {
                     sleep(1);
                 }
                 chk++;
@@ -304,26 +127,26 @@ void channels_wait()
 
             LOG_MSG(NTC, NO_ERRNO,"Closing channels");
             for (indx=0; indx < app->ch_count; indx++) {
-                app->channels[indx].ch_finish = true;
+                app->channels[indx]->ch_finish = true;
             }
 
             chk = 0;
-            ch_count = 1;
-            while ((chk < 5) && (ch_count > 0)) {
-                ch_count = 0;
+            p_count = 1;
+            while ((chk < 5) && (p_count > 0)) {
+                p_count = 0;
                 for (indx=0; indx < app->ch_count; indx++) {
-                    if (app->channels[indx].ch_running == true) {
-                        ch_count++;
+                    if (app->channels[indx]->ch_running == true) {
+                        p_count++;
                     }
                 }
-                if (ch_count > 0) {
+                if (p_count > 0) {
                     sleep(1);
                 }
                 chk++;
             }
             if (chk >= 5) {
                 LOG_MSG(NTC, NO_ERRNO,"Excessive wait for shutdown");
-                ch_count =0;
+                p_count =0;
             } else {
                 LOG_MSG(NTC, NO_ERRNO,"Channels closed. Waited %d", chk);
             }
@@ -369,11 +192,11 @@ int main(int argc, char **argv)
     app->conf = new cls_config();
     app->conf->parms_log();
 
-    channels_init();
+    app->channels_start();
 
     webu_init();
 
-    channels_wait();
+    app->channels_wait();
 
     webu_deinit();
 

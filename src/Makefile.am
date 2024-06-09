@@ -8,10 +8,10 @@ bin_PROGRAMS = restream
 
 restream_SOURCES = \
 	restream.hpp     restream.cpp \
+	channel.hpp      channel.cpp \
 	logger.hpp       logger.cpp \
 	util.hpp         util.cpp \
 	conf.hpp         conf.cpp \
-	guide.hpp        guide.cpp \
 	infile.hpp       infile.cpp \
 	webu.hpp         webu.cpp \
 	webu_mpegts.hpp  webu_mpegts.cpp

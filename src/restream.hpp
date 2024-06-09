@@ -43,10 +43,12 @@
     #include <errno.h>
     #include <sys/types.h>
     #include <sys/stat.h>
+    #include <sys/socket.h>
+    #include <sys/un.h>
+    #include <sys/time.h>
     #include <fcntl.h>
     #include <unistd.h>
     #include <signal.h>
-    #include <sys/time.h>
     #include <time.h>
     #include <string>
     #include <list>
@@ -56,10 +58,13 @@
     #include <thread>
     #include <algorithm>
     #include <mutex>
+    #include <netinet/in.h>
+    #include <arpa/inet.h>
 
     class cls_config;
     class cls_log;
     class cls_app;
+    class cls_channel;
 
     extern cls_app *app;
 
@@ -143,7 +148,6 @@
         int64_t     start_pts;
         int64_t     file_cnt;
     };
-
     struct ctx_av_info {
         int             index;
         AVCodecContext  *codec_ctx;
@@ -152,7 +156,6 @@
         int64_t         start_pts;
         int64_t         last_pts;
     };
-
     struct ctx_file_info {
         AVFormatContext *fmt_ctx;
         ctx_av_info     audio;
@@ -160,45 +163,6 @@
         int64_t         time_start;
     };
 
-    struct ctx_channel_item {
-        cls_app         *app;
-        ctx_params      ch_params;
-        std::string     ch_conf;
-        std::string     ch_dir;
-        std::string     ch_nbr;
-        std::string     ch_sort;
-        std::string     ch_encode;
-
-        int     ch_index;
-        bool    ch_running;
-        bool    ch_finish;
-        bool    ch_tvhguide;
-
-        std::vector<ctx_playlist_item>    playlist;
-        int     playlist_count;
-        int     playlist_index;
-
-        ctx_file_info   ifile;
-        ctx_file_info   ofile;
-        int64_t         file_cnt;
-        AVPacket        *pkt_in;
-        AVFrame         *frame;
-        AVAudioFifo     *fifo;
-        int64_t         audio_last_pts;
-        int64_t         audio_last_dts;
-
-        int cnct_cnt;
-
-        std::vector<ctx_packet_item> pktarray;
-        int         pktarray_count;
-        int         pktarray_index;
-        int         pktarray_start;
-        int64_t     pktnbr;
-
-        pthread_mutex_t    mtx_pktarray;
-        pthread_mutex_t    mtx_ifmt;
-
-    };
 
     class cls_app {
         public:
@@ -207,15 +171,13 @@
 
             int         argc;
             char        **argv;
-
-            bool finish;
+            bool        finish;
+            std::string conf_file;
 
             cls_config  *conf;
             cls_log     *log;
+            std::vector<cls_channel*>   channels;
 
-            std::string     conf_file;
-
-            std::vector<ctx_channel_item>    channels;
             int         ch_count;
             int         webcontrol_running;
             int         webcontrol_finish;
@@ -223,6 +185,10 @@
             char        webcontrol_digest_rand[12];
             struct MHD_Daemon               *webcontrol_daemon;
             std::list<ctx_webu_clients>      webcontrol_clients;
+
+            void channels_start();
+            void channels_wait();
+
         private:
             void signal_setup();
 

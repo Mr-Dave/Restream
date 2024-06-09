@@ -20,9 +20,10 @@
 #include "conf.hpp"
 #include "logger.hpp"
 #include "util.hpp"
+#include "channel.hpp"
+#include "infile.hpp"
 #include "webu.hpp"
 #include "webu_mpegts.hpp"
-#include "infile.hpp"
 
 void webu_mpegts_free_context(ctx_webui *webui)
 {

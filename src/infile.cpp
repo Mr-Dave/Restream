@@ -20,11 +20,11 @@
 #include "conf.hpp"
 #include "util.hpp"
 #include "logger.hpp"
-#include "guide.hpp"
+#include "channel.hpp"
 #include "infile.hpp"
 #include "webu.hpp"
 
-static int decoder_init_video(ctx_channel_item *chitm)
+static int decoder_init_video(cls_channel *chitm)
 {
     int retcd;
     AVStream *stream;
@@ -81,7 +81,7 @@ static int decoder_init_video(ctx_channel_item *chitm)
     return 0;
 }
 
-static int decoder_init_audio(ctx_channel_item *chitm)
+static int decoder_init_audio(cls_channel *chitm)
 {
     int retcd;
     AVStream *stream;
@@ -130,7 +130,7 @@ static int decoder_init_audio(ctx_channel_item *chitm)
     return 0;
 }
 
-int decoder_init(ctx_channel_item *chitm)
+int decoder_init(cls_channel *chitm)
 {
     int retcd, indx;
     char errstr[128];
@@ -180,7 +180,7 @@ int decoder_init(ctx_channel_item *chitm)
     return 0;
 }
 
-int decoder_get_ts(ctx_channel_item *chitm)
+int decoder_get_ts(cls_channel *chitm)
 {
     int retcd, indx;
     int64_t temp_pts;
@@ -248,7 +248,7 @@ int decoder_get_ts(ctx_channel_item *chitm)
     return 0;
 }
 
-static void infile_wait(ctx_channel_item *chitm)
+static void infile_wait(cls_channel *chitm)
 {
     int64_t tm_diff, pts_diff, tot_diff;
     int64_t sec_full, sec_msec;
@@ -312,7 +312,7 @@ static void infile_wait(ctx_channel_item *chitm)
     }
 }
 
-static void decoder_send(ctx_channel_item *chitm)
+static void decoder_send(cls_channel *chitm)
 {
     int retcd;
     char errstr[128];
@@ -336,7 +336,7 @@ static void decoder_send(ctx_channel_item *chitm)
     }
 }
 
-static void decoder_receive(ctx_channel_item *chitm)
+static void decoder_receive(cls_channel *chitm)
 {
     int retcd;
     char errstr[128];
@@ -371,7 +371,7 @@ static void decoder_receive(ctx_channel_item *chitm)
 
 }
 
-static int encode_buffer_audio(ctx_channel_item *chitm)
+static int encode_buffer_audio(cls_channel *chitm)
 {
     int frame_size, retcd, bufspc;
     int frmsz_src, frmsz_dst;
@@ -460,7 +460,7 @@ static int encode_buffer_audio(ctx_channel_item *chitm)
     return 0;
 }
 
-static void encoder_send(ctx_channel_item *chitm)
+static void encoder_send(cls_channel *chitm)
 {
     int retcd;
     char errstr[128];
@@ -521,7 +521,7 @@ static void encoder_send(ctx_channel_item *chitm)
 
 }
 
-static void packetarray_resize(ctx_channel_item *chitm)
+static void packetarray_resize(cls_channel *chitm)
 {
     ctx_packet_item pktitm;
     int indx;
@@ -543,7 +543,7 @@ static void packetarray_resize(ctx_channel_item *chitm)
     pthread_mutex_unlock(&chitm->mtx_pktarray);
 }
 
-int pktarray_get_index(ctx_channel_item *chitm)
+int pktarray_get_index(cls_channel *chitm)
 {
     int retval;
     pthread_mutex_lock(&chitm->mtx_pktarray);
@@ -570,7 +570,7 @@ int pktarray_indx_prev(int index)
     }
 }
 
-static void packetarray_add(ctx_channel_item *chitm, AVPacket *pkt)
+static void packetarray_add(cls_channel *chitm, AVPacket *pkt)
 {
     int indx_next, retcd;
     static int keycnt;
@@ -643,7 +643,7 @@ static void packetarray_add(ctx_channel_item *chitm, AVPacket *pkt)
 
 }
 
-static void encoder_receive(ctx_channel_item *chitm)
+static void encoder_receive(cls_channel *chitm)
 {
     int retcd;
     char errstr[128];
@@ -683,7 +683,7 @@ static void encoder_receive(ctx_channel_item *chitm)
     }
 }
 
-void infile_read(ctx_channel_item *chitm)
+void infile_read(cls_channel *chitm)
 {
     int retcd;
 
@@ -714,7 +714,7 @@ void infile_read(ctx_channel_item *chitm)
     av_packet_free(&chitm->pkt_in);
 }
 
-static int encoder_init_video_h264(ctx_channel_item *chitm)
+static int encoder_init_video_h264(cls_channel *chitm)
 {
     const AVCodec *encoder;
     AVStream *stream;
@@ -819,7 +819,7 @@ static int encoder_init_video_h264(ctx_channel_item *chitm)
     return 0;
 }
 
-static int encoder_init_video_mpeg(ctx_channel_item *chitm)
+static int encoder_init_video_mpeg(cls_channel *chitm)
 {
     const AVCodec *encoder;
     AVStream *stream;
@@ -922,7 +922,7 @@ static int encoder_init_video_mpeg(ctx_channel_item *chitm)
 
 }
 
-static int encoder_init_audio(ctx_channel_item *chitm)
+static int encoder_init_audio(cls_channel *chitm)
 {
     AVStream *stream;
     AVCodecContext *enc_ctx,*dec_ctx;
@@ -1009,7 +1009,7 @@ static int encoder_init_audio(ctx_channel_item *chitm)
     return 0;
 }
 
-int encoder_init(ctx_channel_item *chitm)
+int encoder_init(cls_channel *chitm)
 {
     if (chitm->ifile.fmt_ctx == NULL) {
         LOG_MSG(NTC, NO_ERRNO
@@ -1045,7 +1045,7 @@ int encoder_init(ctx_channel_item *chitm)
 
 }
 
-void streams_close(ctx_channel_item *chitm)
+void streams_close(cls_channel *chitm)
 {
     LOG_MSG(NTC, NO_ERRNO, "Ch%s: Closing"
         , chitm->ch_nbr.c_str());

@@ -16,14 +16,11 @@
  *
 */
 
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <sys/socket.h>
-
 #include "restream.hpp"
 #include "conf.hpp"
-#include "logger.hpp"
 #include "util.hpp"
+#include "logger.hpp"
+#include "channel.hpp"
 #include "webu.hpp"
 #include "webu_mpegts.hpp"
 
@@ -135,9 +132,9 @@ static void webu_parms_edit(ctx_webui *webui)
     }
 
     for (indx=0; indx<app->ch_count; indx++) {
-        if (atoi(app->channels[indx].ch_nbr.c_str()) == webui->channel_id) {
+        if (atoi(app->channels[indx]->ch_nbr.c_str()) == webui->channel_id) {
             webui->channel_indx = indx;
-            webui->chitm = &app->channels[indx];
+            webui->chitm = app->channels[indx];
         }
     }
 

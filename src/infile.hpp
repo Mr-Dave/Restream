@@ -19,12 +19,12 @@
 #ifndef _INCLUDE_INFILE_HPP_
 #define _INCLUDE_INFILE_HPP_
 
-    int decoder_init(ctx_channel_item *chitm);
-    int encoder_init(ctx_channel_item *chitm);
-    int decoder_get_ts(ctx_channel_item *chitm);
-    void infile_read(ctx_channel_item *chitm);
-    void streams_close(ctx_channel_item *chitm);
-    int pktarray_get_index(ctx_channel_item *chitm);
+    int decoder_init(cls_channel *chitm);
+    int encoder_init(cls_channel *chitm);
+    int decoder_get_ts(cls_channel *chitm);
+    void infile_read(cls_channel *chitm);
+    void streams_close(cls_channel *chitm);
+    int pktarray_get_index(cls_channel *chitm);
     int pktarray_indx_next(int index);
     int pktarray_indx_prev(int index);
 
