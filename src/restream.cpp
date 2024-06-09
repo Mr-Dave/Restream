@@ -22,6 +22,7 @@
 #include "logger.hpp"
 #include "channel.hpp"
 #include "infile.hpp"
+#include "pktarray.hpp"
 #include "webu.hpp"
 
 cls_app *app;
@@ -220,6 +221,12 @@ cls_app::cls_app(int p_argc, char **p_argv)
 
 cls_app::~cls_app()
 {
+    int indx;
+
+    for (indx=0; indx < app->ch_count; indx++) {
+        delete app->channels[indx];
+    }
+
     delete conf;
     delete log;
 }

@@ -22,6 +22,7 @@
 #include "logger.hpp"
 #include "channel.hpp"
 #include "infile.hpp"
+#include "pktarray.hpp"
 #include "webu.hpp"
 
 bool playlist_cmp(const ctx_playlist_item& a, const ctx_playlist_item& b)
@@ -181,7 +182,7 @@ void cls_channel::guide_process()
     int fd, rc;
     std::string xml;
 
-    if (ch_finish == true) {
+    if ((ch_finish == true) || (ch_tvhguide == false)) {
         return;
     }
 
@@ -224,72 +225,29 @@ void cls_channel::guide_process()
 
 }
 
-void cls_channel::defaults()
-{
-    ifile.audio.index = -1;
-    ifile.audio.last_pts = -1;
-    ifile.audio.start_pts = -1;
-    ifile.audio.codec_ctx = nullptr;
-    ifile.audio.strm = nullptr;
-    ifile.audio.base_pdts = 0;
-    ifile.video = ifile.audio;
-    ifile.fmt_ctx = nullptr;
-    ifile.time_start = -1;
-    ofile = ifile;
-    pktarray_start = 0;
-}
-
 void cls_channel::process()
 {
     int indx;
 
     LOG_MSG(NTC, NO_ERRNO, "Starting ch%s",ch_nbr.c_str());
 
-    pthread_mutex_lock(&mtx_ifmt);
-
     while (ch_finish == false) {
         playlist_load();
         for (indx=0; indx < playlist_count; indx++) {
-            LOG_MSG(NTC, NO_ERRNO
-                , "Ch%s: Playing: %s"
-                , ch_nbr.c_str()
-                , playlist[indx].filenm.c_str());
             playlist_index = indx;
-            if (ch_tvhguide == true) {
-                guide_process();
-            }
-            defaults();
-            if (decoder_init(this) != 0) {
-                continue;
-            }
-            if (encoder_init(this) != 0) {
-                continue;
-            }
-            if (decoder_get_ts(this) != 0) {
-                continue;
-            }
-
-            pthread_mutex_unlock(&mtx_ifmt);
-            infile_read(this);
-            pthread_mutex_lock(&mtx_ifmt);
-            streams_close(this);
+            LOG_MSG(NTC, NO_ERRNO, "Ch%s: Playing: %s"
+                , ch_nbr.c_str(), playlist[indx].filenm.c_str());
+            guide_process();
+            infile->start(playlist[indx].fullnm);
+            infile->read();
+            infile->stop();
             if (ch_finish == true) {
                 break;
             }
         }
     }
 
-    streams_close(this);
-
-    for (indx=0; indx < (int)pktarray.size(); indx++) {
-        if (pktarray[indx].packet != nullptr) {
-            mypacket_free(pktarray[indx].packet);
-            pktarray[indx].packet = nullptr;
-        }
-    }
-
-    pktarray.clear();
-    pktarray_count = 0;
+    infile->stop();
 
     ch_running = false;
     LOG_MSG(NTC, NO_ERRNO, "Ch%s: Finished",ch_nbr.c_str());
@@ -308,17 +266,8 @@ cls_channel::cls_channel(int p_index, std::string p_conf)
     ch_encode = "";
     ch_index = p_index;
     ch_conf = p_conf;
-    frame = nullptr;
-    pktnbr = 0;
-    pktarray_count = 0;
-    pktarray_index = -1;
-    pkt_in = nullptr;
     cnct_cnt = 0;
     file_cnt = 0;
-    fifo = nullptr;
-
-    pthread_mutex_init(&mtx_ifmt, NULL);
-    pthread_mutex_init(&mtx_pktarray, NULL);
 
     util_parms_parse(
         ch_params
@@ -344,12 +293,15 @@ cls_channel::cls_channel(int p_index, std::string p_conf)
         }
     }
 
-    defaults();
+    infile = new cls_infile(this);
+    pktarray = new cls_pktarray(this);
+
 }
 
 cls_channel::~cls_channel()
 {
-    pthread_mutex_destroy(&mtx_ifmt);
-    pthread_mutex_destroy(&mtx_pktarray);
+
+    delete pktarray;
+    delete infile;
 
 }

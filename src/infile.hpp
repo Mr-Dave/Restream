@@ -19,13 +19,49 @@
 #ifndef _INCLUDE_INFILE_HPP_
 #define _INCLUDE_INFILE_HPP_
 
-    int decoder_init(cls_channel *chitm);
-    int encoder_init(cls_channel *chitm);
-    int decoder_get_ts(cls_channel *chitm);
-    void infile_read(cls_channel *chitm);
-    void streams_close(cls_channel *chitm);
-    int pktarray_get_index(cls_channel *chitm);
-    int pktarray_indx_next(int index);
-    int pktarray_indx_prev(int index);
+    class cls_infile {
+        public:
+            cls_infile(cls_channel *p_chitm);
+            ~cls_infile();
+
+            void start(std::string fnm);
+            void read();
+            void stop();
+
+            ctx_file_info   ifile;
+            ctx_file_info   ofile;
+            pthread_mutex_t mtx;
+
+        private:
+            bool            is_started;
+            cls_channel     *chitm;
+            std::string     ch_nbr;
+
+            AVPacket        *pkt_in;
+            AVFrame         *frame;
+            AVAudioFifo     *fifo;
+            int64_t         audio_last_pts;
+            int64_t         audio_last_dts;
+
+            void defaults();
+
+            int  decoder_init_video();
+            int  decoder_init_audio();
+            int  decoder_init(std::string fnm);
+            int  decoder_get_ts();
+            void decoder_send();
+            void decoder_receive();
+
+            int  encoder_buffer_audio();
+            void encoder_send();
+            void encoder_receive();
+            int  encoder_init_video_h264();
+            int  encoder_init_video_mpeg();
+            int  encoder_init_audio();
+            int  encoder_init();
+
+            void infile_wait();
+
+    };
 
 #endif

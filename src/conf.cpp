@@ -22,6 +22,7 @@
 #include "logger.hpp"
 #include "channel.hpp"
 #include "infile.hpp"
+#include "pktarray.hpp"
 #include "webu.hpp"
 
 void cls_config::parm_set_bool(bool &parm_dest, std::string &parm_in)

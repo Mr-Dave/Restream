@@ -65,6 +65,8 @@
     class cls_log;
     class cls_app;
     class cls_channel;
+    class cls_infile;
+    class cls_pktarray;
 
     extern cls_app *app;
 

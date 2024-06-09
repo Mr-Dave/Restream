@@ -22,6 +22,7 @@
 #include "logger.hpp"
 #include "channel.hpp"
 #include "infile.hpp"
+#include "pktarray.hpp"
 #include "webu.hpp"
 
 const char *log_level_str[] = {NULL, "EMG", "ALR", "CRT", "ERR", "WRN", "NTC", "INF", "DBG", "ALL"};
@@ -149,8 +150,12 @@ cls_log::cls_log()
     log_level = LEVEL_DEFAULT;
     log_file_ptr  = nullptr;
     log_file_name = "";
+    flood_cnt = 0;
     set_mode(LOGMODE_SYSLOG);
-    pthread_mutex_init(&mtx_log, NULL);
+    pthread_mutex_init(&mtx, NULL);
+    memset(msg_prefix,0,sizeof(msg_prefix));
+    memset(msg_flood,0,sizeof(msg_flood));
+    memset(msg_full,0,sizeof(msg_full));
 
 }
 
@@ -162,7 +167,7 @@ cls_log::~cls_log()
         myfclose(log_file_ptr);
         log_file_ptr = nullptr;
     }
-    pthread_mutex_destroy(&mtx_log);
+    pthread_mutex_destroy(&mtx);
 }
 
 void cls_log::write_msg(int loglvl, int flgerr, bool flgfnc, const char *fmt, ...)
@@ -178,7 +183,7 @@ void cls_log::write_msg(int loglvl, int flgerr, bool flgfnc, const char *fmt, ..
         return;
     }
 
-    pthread_mutex_lock(&app->log->mtx_log);
+    pthread_mutex_lock(&mtx);
 
     err_save = errno;
     memset(app->log->msg_full, 0, sizeof(app->log->msg_full));
@@ -222,7 +227,7 @@ void cls_log::write_msg(int loglvl, int flgerr, bool flgfnc, const char *fmt, ..
     if ((app->log->flood_cnt <= 5000) &&
         mystreq(app->log->msg_flood, &app->log->msg_full[16])) {
         app->log->flood_cnt++;
-        pthread_mutex_unlock(&app->log->mtx_log);
+        pthread_mutex_unlock(&mtx);
         return;
     }
 
@@ -230,6 +235,6 @@ void cls_log::write_msg(int loglvl, int flgerr, bool flgfnc, const char *fmt, ..
 
     app->log->write_norm(loglvl, prefixlen);
 
-    pthread_mutex_unlock(&app->log->mtx_log);
+    pthread_mutex_unlock(&mtx);
 
 }

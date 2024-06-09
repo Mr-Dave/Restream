@@ -23,6 +23,7 @@
 #include "logger.hpp"
 #include "channel.hpp"
 #include "infile.hpp"
+#include "pktarray.hpp"
 #include "webu.hpp"
 
 /** Non case sensitive equality check for strings*/

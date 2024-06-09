@@ -13,6 +13,7 @@ restream_SOURCES = \
 	util.hpp         util.cpp \
 	conf.hpp         conf.cpp \
 	infile.hpp       infile.cpp \
+	pktarray.hpp     pktarray.cpp \
 	webu.hpp         webu.cpp \
 	webu_mpegts.hpp  webu_mpegts.cpp
 

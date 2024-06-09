@@ -21,6 +21,7 @@
 #include "util.hpp"
 #include "logger.hpp"
 #include "channel.hpp"
+#include "pktarray.hpp"
 #include "webu.hpp"
 #include "webu_mpegts.hpp"
 

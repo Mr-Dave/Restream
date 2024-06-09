@@ -18,52 +18,36 @@
 
 #ifndef _INCLUDE_CHANNEL_HPP_
 #define _INCLUDE_CHANNEL_HPP_
-
     class cls_channel {
         public:
             cls_channel(int p_indx, std::string p_conf);
             ~cls_channel();
 
-            std::vector<ctx_playlist_item>    playlist;
-            int     playlist_index;
+            cls_infile      *infile;
+            cls_pktarray    *pktarray;
+            int64_t         file_cnt;
+            int             cnct_cnt;
 
             bool            ch_finish;
             bool            ch_running;
-            int             cnct_cnt;
             std::string     ch_nbr;
             std::string     ch_encode;
-
-            ctx_file_info   ifile;
-            ctx_file_info   ofile;
-            int64_t         file_cnt;
-            AVPacket        *pkt_in;
-            AVFrame         *frame;
-            AVAudioFifo     *fifo;
-            int64_t         audio_last_pts;
-            int64_t         audio_last_dts;
-
-            std::vector<ctx_packet_item> pktarray;
-            int         pktarray_count;
-            int         pktarray_index;
-            int         pktarray_start;
-            int64_t     pktnbr;
-
-            pthread_mutex_t    mtx_pktarray;
-            pthread_mutex_t    mtx_ifmt;
 
             void    process();
 
         private:
             std::string     ch_conf;
             ctx_params      ch_params;
-            int             playlist_count;
             bool            ch_tvhguide;
             std::string     ch_sort;
             std::string     ch_dir;
             int             ch_index;
 
-            void defaults();
-            void playlist_load();
+            std::vector<ctx_playlist_item>    playlist;
+            int             playlist_index;
+            int             playlist_count;
+            void            playlist_load();
+
             void guide_times(
                 std::string f1, std::string &st1,std::string &en1,
                 std::string f2, std::string &st2,std::string &en2);
