@@ -20,7 +20,6 @@
 #define _INCLUDE_WEBU_HPP_
     #define WEBU_MHD_OPTS 10           /* Maximum number of options permitted for MHD */
     struct ctx_mhdstart {
-        cls_app                 *app;
         std::string             tls_cert;
         std::string             tls_key;
         bool                    tls_use;

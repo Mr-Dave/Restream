@@ -637,7 +637,7 @@ mhdrslt cls_webua::answer(struct MHD_Connection *p_connection)
         return retcd;
     }
 
-    if (app->webu->wb_finish) {
+    if (c_webu->wb_finish) {
         LOG_MSG(NTC, NO_ERRNO ,"Shutting down channels");
         return MHD_NO;
     }
