@@ -546,10 +546,10 @@ void cls_config::process_cmdline()
 {
     int c;
 
-    while ((c = getopt(app->argc, app->argv, "cdlh:")) != -1)
+    while ((c = getopt(c_app->argc, c_app->argv, "cdlh:")) != -1)
         switch (c) {
         case 'c':
-            app->conf_file.assign(optarg);
+            c_app->conf_file.assign(optarg);
             break;
         case 'd':
             cmd_log_level.assign(optarg);
@@ -574,17 +574,17 @@ void cls_config::process_file()
     std::string line, parm_nm, parm_vl;
     std::ifstream ifs;
 
-    ifs.open(app->conf_file);
+    ifs.open(c_app->conf_file);
         if (ifs.is_open() == false) {
             LOG_MSG(ERR, NO_ERRNO
                 , "config file not found: %s"
-                , app->conf_file.c_str());
+                , c_app->conf_file.c_str());
             return;
         }
 
         LOG_MSG(NTC, NO_ERRNO
             , "Processing config file %s"
-            , app->conf_file.c_str());
+            , c_app->conf_file.c_str());
 
         while (std::getline(ifs, line)) {
             mytrim(line);
@@ -629,7 +629,7 @@ void cls_config::parms_log()
 
     SHT_MSG(INF, NO_ERRNO
         ,"Logging parameters from config file: %s"
-        , app->conf_file.c_str());
+        , c_app->conf_file.c_str());
 
     for (cfg_it = config_parms.begin();
         cfg_it != config_parms.end(); cfg_it++) {
@@ -685,15 +685,15 @@ void cls_config::parms_write()
     time_t now = time(0);
     strftime(timestamp, 32, "%Y-%m-%dT%H:%M:%S", localtime(&now));
 
-    conffile = myfopen(app->conf_file.c_str(), "we");
+    conffile = myfopen(c_app->conf_file.c_str(), "we");
     if (conffile == NULL) {
         LOG_MSG(NTC,  NO_ERRNO
             , "Failed to write configuration to %s"
-            , app->conf_file.c_str());
+            , c_app->conf_file.c_str());
         return;
     }
 
-    fprintf(conffile, "; %s\n", app->conf_file.c_str());
+    fprintf(conffile, "; %s\n", c_app->conf_file.c_str());
     fprintf(conffile, "; at %s\n", timestamp);
     fprintf(conffile, "\n\n");
 
@@ -719,7 +719,7 @@ void cls_config::parms_write()
 
     LOG_MSG(NTC,  NO_ERRNO
         , "Configuration written to %s"
-        , app->conf_file.c_str());
+        , c_app->conf_file.c_str());
 }
 
 void cls_config::parms_dflt()
@@ -774,8 +774,10 @@ void cls_config::parms_init()
     parms_add("channel",                   PARM_TYP_ARRAY,  PARM_CAT_02, WEBUI_LEVEL_ADVANCED);
 }
 
-cls_config::cls_config()
+cls_config::cls_config(cls_app *p_app)
 {
+    c_app = p_app;
+
     std::string filename;
     char path[PATH_MAX];
     struct stat statbuf;
@@ -785,8 +787,8 @@ cls_config::cls_config()
     process_cmdline();
 
     filename = "";
-    if (app->conf_file != "") {
-        filename = app->conf_file;
+    if (c_app->conf_file != "") {
+        filename = c_app->conf_file;
         if (stat(filename.c_str(), &statbuf) != 0) {
             filename="";
         }
@@ -823,7 +825,7 @@ cls_config::cls_config()
         exit(-1);
     }
 
-    app->conf_file = filename;
+    c_app->conf_file = filename;
 
     process_file();
 
@@ -834,9 +836,12 @@ cls_config::cls_config()
     if (cmd_log_level != "") {
         edit_log_level(cmd_log_level, PARM_ACT_SET);
     }
-    app->log->log_level = log_level;
-    app->log->log_fflevel = log_fflevel;
-    app->log->set_log_file(log_file);
+    c_app->log->log_level = log_level;
+    c_app->log->log_fflevel = log_fflevel;
+    c_app->log->set_log_file(log_file);
+
+    parms_log();
+
 }
 
 cls_config::~cls_config()

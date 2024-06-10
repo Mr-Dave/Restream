@@ -20,7 +20,7 @@
 #define _INCLUDE_CONF_HPP_
     class cls_config {
         public:
-            cls_config();
+            cls_config(cls_app *p_app);
             ~cls_config();
             std::string     log_file;
             int             log_level;
@@ -48,6 +48,7 @@
             void parms_log();
 
         private:
+            cls_app         *c_app;
             std::string     cmd_log_file;
             std::string     cmd_log_level;
 

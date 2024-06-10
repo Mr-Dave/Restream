@@ -34,6 +34,7 @@ static void signal_handler(int signo)
     switch(signo) {
     case SIGALRM:
         fprintf(stderr, "Caught alarm signal.\n");
+        app->finish = true;
         break;
     case SIGINT:
         fprintf(stderr, "Caught interrupt signal.\n");
@@ -41,18 +42,21 @@ static void signal_handler(int signo)
         break;
     case SIGABRT:
         fprintf(stderr, "Caught abort signal.\n");
+        app->finish = true;
         break;
     case SIGHUP:
         fprintf(stderr, "Caught hup signal.\n");
         break;
     case SIGQUIT:
         fprintf(stderr, "Caught quit signal.\n");
+        app->finish = true;
         break;
     case SIGIO:
         fprintf(stderr, "Caught IO signal.\n");
         break;
     case SIGTERM:
         fprintf(stderr, "Caught term signal.\n");
+        app->finish = true;
         break;
     case SIGPIPE:
         //fprintf(stderr, "Caught pipe signal.\n");
@@ -164,12 +168,6 @@ int main(int argc, char **argv)
 
     app = new cls_app(argc, argv);
 
-    app->log = new cls_log(app);
-    app->conf = new cls_config();
-    app->webu = new cls_webu(app);
-
-    app->conf->parms_log();
-
     app->channels_start();
 
     app->channels_wait();
@@ -181,6 +179,8 @@ int main(int argc, char **argv)
 
 cls_app::cls_app(int p_argc, char **p_argv)
 {
+    app = this; /* Needed for early signals and log messages */
+
     argc = p_argc;
     argv = p_argv;
 
@@ -188,7 +188,9 @@ cls_app::cls_app(int p_argc, char **p_argv)
 
     signal_setup();
 
-
+    log = new cls_log(this);
+    conf = new cls_config(this);
+    webu = new cls_webu(this);
 
 }
 
