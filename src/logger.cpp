@@ -30,21 +30,54 @@
 
 const char *log_level_str[] = {NULL, "EMG", "ALR", "CRT", "ERR", "WRN", "NTC", "INF", "DBG", "ALL"};
 
+void ff_log(void *var1, int errnbr, const char *fmt, va_list vlist)
+{
+    (void)var1;
+    char buff[1024];
+    int fflvl;
+
+    vsnprintf(buff, sizeof(buff), fmt, vlist);
+
+    buff[strlen(buff)-1] = 0;
+
+    if (strstr(buff, "forced frame type") != nullptr) {
+        return;
+    }
+
+    /*
+    AV_LOG_QUIET    -8  1
+    AV_LOG_PANIC     0  2
+    AV_LOG_FATAL     8  3
+    AV_LOG_ERROR    16  4
+    AV_LOG_WARNING  24  5
+    AV_LOG_INFO     32  6
+    AV_LOG_VERBOSE  40  7
+    AV_LOG_DEBUG    48  8
+    AV_LOG_TRACE    56  9
+    */
+
+    fflvl = ((app->log->log_fflevel -2) * 8);
+
+    if (errnbr < fflvl) {
+        LOG_MSG(INF, NO_ERRNO,"ffmpeg message: %s",buff );
+    }
+}
+
 void cls_log::write_flood(int loglvl)
 {
     char flood_repeats[1024];
 
-    if (app->log->flood_cnt <= 1) {
+    if (flood_cnt <= 1) {
         return;
     }
 
     snprintf(flood_repeats, sizeof(flood_repeats)
         , "%s Above message repeats %d times\n"
-        , app->log->msg_prefix, app->log->flood_cnt-1);
+        , msg_prefix, flood_cnt-1);
 
-    if (app->log->log_mode == LOGMODE_FILE) {
-        fputs(flood_repeats, app->log->log_file_ptr);
-        fflush(app->log->log_file_ptr);
+    if (log_mode == LOGMODE_FILE) {
+        fputs(flood_repeats, log_file_ptr);
+        fflush(log_file_ptr);
 
     } else {    /* The syslog level values are one less*/
         syslog(loglvl, "%s", flood_repeats);
@@ -55,25 +88,25 @@ void cls_log::write_flood(int loglvl)
 
 void cls_log::write_norm(int loglvl, int prefixlen)
 {
-    app->log->flood_cnt = 1;
+    flood_cnt = 1;
 
-    snprintf(app->log->msg_flood
-        , sizeof(app->log->msg_flood), "%s"
-        , &app->log->msg_full[16]);
+    snprintf(msg_flood
+        , sizeof(msg_flood), "%s"
+        , &msg_full[16]);
 
-    snprintf(app->log->msg_prefix, prefixlen, "%s", app->log->msg_full);
+    snprintf(msg_prefix, prefixlen, "%s", msg_full);
 
-    if (app->log->log_mode == LOGMODE_FILE) {
-        strcpy(app->log->msg_full +
-            strlen(app->log->msg_full),"\n");
-        fputs(app->log->msg_full, app->log->log_file_ptr);
-        fflush(app->log->log_file_ptr);
+    if (log_mode == LOGMODE_FILE) {
+        strcpy(msg_full +
+            strlen(msg_full),"\n");
+        fputs(msg_full, log_file_ptr);
+        fflush(log_file_ptr);
 
     } else {
-        syslog(loglvl-1, "%s", app->log->msg_full);
-        strcpy(app->log->msg_full +
-            strlen(app->log->msg_full),"\n");
-        fputs(app->log->msg_full, stderr);
+        syslog(loglvl-1, "%s", msg_full);
+        strcpy(msg_full +
+            strlen(msg_full),"\n");
+        fputs(msg_full, stderr);
         fflush(stderr);
 
     }
@@ -91,14 +124,14 @@ void cls_log::add_errmsg(int flgerr, int err_save)
     memset(err_buf, 0, sizeof(err_buf));
     strerror_r(err_save, err_buf, sizeof(err_buf));
     errsz = strlen(err_buf);
-    msgsz = strlen(app->log->msg_full);
+    msgsz = strlen(msg_full);
 
-    if ((msgsz+errsz+2) >= (int)sizeof(app->log->msg_full)) {
+    if ((msgsz+errsz+2) >= (int)sizeof(msg_full)) {
         msgsz = msgsz-errsz-2;
-        memset(app->log->msg_full+msgsz, 0, sizeof(app->log->msg_full) - msgsz);
+        memset(msg_full+msgsz, 0, sizeof(msg_full) - msgsz);
     }
-    strcpy(app->log->msg_full+msgsz,": ");
-    memcpy(app->log->msg_full+msgsz + 2, err_buf, errsz);
+    strcpy(msg_full+msgsz,": ");
+    memcpy(msg_full+msgsz + 2, err_buf, errsz);
 
 }
 
@@ -136,41 +169,15 @@ void cls_log::set_log_file(std::string pname)
             log_file_name = pname;
             set_mode(LOGMODE_SYSLOG);
             LOG_MSG(NTC, NO_ERRNO, "Logging to file (%s)"
-                , app->conf->log_file.c_str());
+                ,pname.c_str());
             set_mode(LOGMODE_FILE);
         } else {
             log_file_name = "syslog";
             set_mode(LOGMODE_SYSLOG);
             LOG_MSG(EMG, SHOW_ERRNO, "Cannot create log file %s"
-                , app->conf->log_file.c_str());
+                , pname.c_str());
         }
     }
-}
-
-cls_log::cls_log()
-{
-    log_mode = LOGMODE_NONE;
-    log_level = LEVEL_DEFAULT;
-    log_file_ptr  = nullptr;
-    log_file_name = "";
-    flood_cnt = 0;
-    set_mode(LOGMODE_SYSLOG);
-    pthread_mutex_init(&mtx, NULL);
-    memset(msg_prefix,0,sizeof(msg_prefix));
-    memset(msg_flood,0,sizeof(msg_flood));
-    memset(msg_full,0,sizeof(msg_full));
-
-}
-
-cls_log::~cls_log()
-{
-    if (log_file_ptr != nullptr) {
-        LOG_MSG(NTC, NO_ERRNO, "Closing log_file (%s)."
-            , app->conf->log_file.c_str());
-        myfclose(log_file_ptr);
-        log_file_ptr = nullptr;
-    }
-    pthread_mutex_destroy(&mtx);
 }
 
 void cls_log::write_msg(int loglvl, int flgerr, bool flgfnc, const char *fmt, ...)
@@ -182,14 +189,14 @@ void cls_log::write_msg(int loglvl, int flgerr, bool flgfnc, const char *fmt, ..
     va_list ap;
     time_t now;
 
-    if (loglvl > app->log->log_level) {
+    if (loglvl > log_level) {
         return;
     }
 
     pthread_mutex_lock(&mtx);
 
     err_save = errno;
-    memset(app->log->msg_full, 0, sizeof(app->log->msg_full));
+    memset(msg_full, 0, sizeof(msg_full));
     memset(usrfmt, 0, sizeof(usrfmt));
 
     mythreadname_get(threadname);
@@ -198,8 +205,8 @@ void cls_log::write_msg(int loglvl, int flgerr, bool flgfnc, const char *fmt, ..
     strftime(msg_time, sizeof(msg_time)
         , "%b %d %H:%M:%S", localtime(&now));
 
-    n = snprintf(app->log->msg_full
-        , sizeof(app->log->msg_full)
+    n = snprintf(msg_full
+        , sizeof(msg_full)
         , "%s [%s][%s] ", msg_time
         , log_level_str[loglvl], threadname );
     prefixlen = n;
@@ -216,28 +223,56 @@ void cls_log::write_msg(int loglvl, int flgerr, bool flgfnc, const char *fmt, ..
 
     va_start(ap, fmt);
         n += vsnprintf(
-            app->log->msg_full + n
-            , sizeof(app->log->msg_full)-n-1
+            msg_full + n
+            , sizeof(msg_full)-n-1
             , usrfmt, ap);
     va_end(ap);
 
-    app->log->add_errmsg(flgerr, err_save);
+    add_errmsg(flgerr, err_save);
 
     /*
       Compare the part of the message that is
       after the message time (time is 16 bytes)
     */
-    if ((app->log->flood_cnt <= 5000) &&
-        mystreq(app->log->msg_flood, &app->log->msg_full[16])) {
-        app->log->flood_cnt++;
+    if ((flood_cnt <= 5000) &&
+        mystreq(msg_flood, &msg_full[16])) {
+        flood_cnt++;
         pthread_mutex_unlock(&mtx);
         return;
     }
 
-    app->log->write_flood(loglvl);
+    write_flood(loglvl);
 
-    app->log->write_norm(loglvl, prefixlen);
+    write_norm(loglvl, prefixlen);
 
     pthread_mutex_unlock(&mtx);
 
+}
+
+cls_log::cls_log(cls_app *p_app)
+{
+    c_app = p_app;
+    log_mode = LOGMODE_NONE;
+    log_level = LEVEL_DEFAULT;
+    log_file_ptr  = nullptr;
+    log_file_name = "";
+    flood_cnt = 0;
+    set_mode(LOGMODE_SYSLOG);
+    pthread_mutex_init(&mtx, NULL);
+    memset(msg_prefix,0,sizeof(msg_prefix));
+    memset(msg_flood,0,sizeof(msg_flood));
+    memset(msg_full,0,sizeof(msg_full));
+
+    av_log_set_callback(ff_log);
+}
+
+cls_log::~cls_log()
+{
+    if (log_file_ptr != nullptr) {
+        LOG_MSG(NTC, NO_ERRNO, "Closing log_file (%s)."
+            , log_file_name.c_str());
+        myfclose(log_file_ptr);
+        log_file_ptr = nullptr;
+    }
+    pthread_mutex_destroy(&mtx);
 }

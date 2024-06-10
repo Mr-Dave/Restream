@@ -89,6 +89,30 @@ void cls_config::edit_log_level(std::string &parm, enum PARM_ACT pact)
     return;
 }
 
+void cls_config::edit_log_fflevel(std::string &parm, enum PARM_ACT pact)
+{
+    int parm_in;
+    if (pact == PARM_ACT_DFLT) {
+        log_fflevel = 2;
+    } else if (pact == PARM_ACT_SET) {
+        parm_in = atoi(parm.c_str());
+        if ((parm_in < 1) || (parm_in > 9)) {
+            LOG_MSG(NTC,  NO_ERRNO, "Invalid log_fflevel %d",parm_in);
+        } else {
+            log_fflevel = parm_in;
+        }
+    } else if (pact == PARM_ACT_GET) {
+        parm = std::to_string(log_fflevel);
+    } else if (pact == PARM_ACT_LIST) {
+        parm = "[";
+        parm = parm + "\"1\",\"2\",\"3\",\"4\",\"5\"";
+        parm = parm + ",\"6\",\"7\",\"8\",\"9\"";
+        parm = parm + "]";
+    }
+
+    return;
+}
+
 void cls_config::edit_webcontrol_port(std::string &parm, enum PARM_ACT pact)
 {
     int parm_in;
@@ -383,6 +407,7 @@ void cls_config::edit_cat00(std::string parm_nm
 {
     if (parm_nm == "log_file") {            edit_log_file(parm_val, pact);
     } else if (parm_nm == "log_level") {    edit_log_level(parm_val, pact);
+    } else if (parm_nm == "log_fflevel") {  edit_log_fflevel(parm_val, pact);
     }
 }
 
@@ -728,6 +753,7 @@ void cls_config::parms_init()
 
     parms_add("log_file",                  PARM_TYP_STRING, PARM_CAT_00, WEBUI_LEVEL_ADVANCED);
     parms_add("log_level",                 PARM_TYP_LIST,   PARM_CAT_00, WEBUI_LEVEL_LIMITED);
+    parms_add("log_fflevel",               PARM_TYP_LIST,   PARM_CAT_00, WEBUI_LEVEL_LIMITED);
     parms_add("webcontrol_port",           PARM_TYP_INT,    PARM_CAT_01, WEBUI_LEVEL_ADVANCED);
     parms_add("webcontrol_port2",          PARM_TYP_INT,    PARM_CAT_01, WEBUI_LEVEL_ADVANCED);
     parms_add("webcontrol_base_path",      PARM_TYP_STRING, PARM_CAT_01, WEBUI_LEVEL_ADVANCED);
@@ -809,6 +835,7 @@ cls_config::cls_config()
         edit_log_level(cmd_log_level, PARM_ACT_SET);
     }
     app->log->log_level = log_level;
+    app->log->log_fflevel = log_fflevel;
     app->log->set_log_file(log_file);
 }
 

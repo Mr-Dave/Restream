@@ -158,41 +158,13 @@ void cls_app::channels_wait()
 
 }
 
-void logger(void *var1, int errnbr, const char *fmt, va_list vlist)
-{
-    char buff[1024];
-    (void)var1;
-
-    vsnprintf(buff, sizeof(buff), fmt, vlist);
-
-    buff[strlen(buff)-1] = 0;
-
-    if (strstr(buff, "forced frame type") != nullptr) {
-        return;
-    }
-
-    if (errnbr < AV_LOG_VERBOSE) {
-        LOG_MSG(INF, NO_ERRNO,"ffmpeg message: %s",buff );
-    }
-
-    return;
-
-    if (errnbr < AV_LOG_FATAL) {
-        LOG_MSG(INF, NO_ERRNO,"ffmpeg message: %s", buff);
-    }
-    if (errnbr < AV_LOG_TRACE) {
-        LOG_MSG(INF, NO_ERRNO,"ffmpeg message: %s", buff);
-    }
-
-}
-
 int main(int argc, char **argv)
 {
     mythreadname_set(nullptr,1,"main");
 
     app = new cls_app(argc, argv);
 
-    app->log = new cls_log();
+    app->log = new cls_log(app);
     app->conf = new cls_config();
     app->webu = new cls_webu(app);
 
@@ -216,7 +188,7 @@ cls_app::cls_app(int p_argc, char **p_argv)
 
     signal_setup();
 
-    av_log_set_callback(logger);
+
 
 }
 

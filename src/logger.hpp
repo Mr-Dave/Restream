@@ -43,12 +43,14 @@
 
     class cls_log {
         public:
-            cls_log();
+            cls_log(cls_app *p_app);
             ~cls_log();
             int             log_level;
+            int             log_fflevel;
             void set_log_file(std::string pname);
             void write_msg(int loglvl, int flgerr, bool flgfnc, const char *fmt, ...);
         private:
+            cls_app             *c_app;
             pthread_mutex_t     mtx;
             int                 log_mode;
             FILE                *log_file_ptr;
