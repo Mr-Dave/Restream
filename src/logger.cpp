@@ -24,6 +24,9 @@
 #include "infile.hpp"
 #include "pktarray.hpp"
 #include "webu.hpp"
+#include "webu_ans.hpp"
+#include "webu_mpegts.hpp"
+
 
 const char *log_level_str[] = {NULL, "EMG", "ALR", "CRT", "ERR", "WRN", "NTC", "INF", "DBG", "ALL"};
 

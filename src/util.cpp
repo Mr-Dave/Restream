@@ -25,6 +25,9 @@
 #include "infile.hpp"
 #include "pktarray.hpp"
 #include "webu.hpp"
+#include "webu_ans.hpp"
+#include "webu_mpegts.hpp"
+
 
 /** Non case sensitive equality check for strings*/
 int mystrceq(const char* var1, const char* var2)

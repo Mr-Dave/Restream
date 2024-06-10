@@ -24,6 +24,9 @@
 #include "infile.hpp"
 #include "pktarray.hpp"
 #include "webu.hpp"
+#include "webu_ans.hpp"
+#include "webu_mpegts.hpp"
+
 
 void cls_pktarray::resize()
 {

@@ -24,6 +24,8 @@
 #include "infile.hpp"
 #include "pktarray.hpp"
 #include "webu.hpp"
+#include "webu_ans.hpp"
+#include "webu_mpegts.hpp"
 
 cls_app *app;
 
@@ -107,7 +109,7 @@ void cls_app::channels_wait()
         sleep(1);
         if (app->finish) {
             LOG_MSG(NTC, NO_ERRNO,"Closing web interface connections");
-            app->webcontrol_finish = true;
+            webu->wb_finish = true;
             chk = 0;
             p_count = 1;
             while ((chk < 5) && (p_count > 0)) {
@@ -189,17 +191,16 @@ int main(int argc, char **argv)
     mythreadname_set(nullptr,1,"main");
 
     app = new cls_app(argc, argv);
+
     app->log = new cls_log();
     app->conf = new cls_config();
+    app->webu = new cls_webu(app);
+
     app->conf->parms_log();
 
     app->channels_start();
 
-    webu_init();
-
     app->channels_wait();
-
-    webu_deinit();
 
     delete app;
 
@@ -227,6 +228,8 @@ cls_app::~cls_app()
         delete app->channels[indx];
     }
 
+    delete webu;
     delete conf;
     delete log;
+
 }

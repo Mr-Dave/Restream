@@ -18,88 +18,52 @@
 
 #ifndef _INCLUDE_WEBU_HPP_
 #define _INCLUDE_WEBU_HPP_
-
-    /* Some defines of lengths for our buffers */
-    #define WEBUI_LEN_PARM 512          /* Parameters specified */
-    #define WEBUI_LEN_URLI 512          /* Maximum URL permitted */
-    #define WEBUI_LEN_RESP 2048         /* Initial response size */
-    #define WEBUI_MHD_OPTS 10           /* Maximum number of options permitted for MHD */
-
-    #define WEBUI_POST_BFRSZ  512
-
-    enum WEBUI_METHOD {
-        WEBUI_METHOD_GET    = 0,
-        WEBUI_METHOD_POST   = 1
+    #define WEBU_MHD_OPTS 10           /* Maximum number of options permitted for MHD */
+    struct ctx_mhdstart {
+        cls_app                 *app;
+        std::string             tls_cert;
+        std::string             tls_key;
+        bool                    tls_use;
+        struct MHD_OptionItem   *mhd_ops;
+        int                     mhd_opt_nbr;
+        unsigned int            mhd_flags;
+        int                     ipv6;
+        struct sockaddr_in      lpbk_ipv4;
+        struct sockaddr_in6     lpbk_ipv6;
     };
-
-    enum WEBUI_CNCT {
-        WEBUI_CNCT_CONTROL,
-        WEBUI_CNCT_TS_FULL,
-        WEBUI_CNCT_UNKNOWN
-    };
-
-    enum WEBUI_RESP {
-        WEBUI_RESP_HTML     = 0,
-        WEBUI_RESP_JSON     = 1,
-        WEBUI_RESP_TEXT     = 2
-    };
-
     struct ctx_key {
         char                        *key_nm;        /* Name of the key item */
         char                        *key_val;       /* Value of the key item */
         size_t                      key_sz;         /* The size of the value */
     };
 
-    struct ctx_webui {
-        std::string                 url;            /* The URL sent from the client */
-        std::string                 uri_chid;       /* Parsed channel number from the url eg /camid/cmd1/cmd2/cmd3 */
-        std::string                 uri_cmd1;       /* Parsed command1 from the url eg /camid/cmd1/cmd2/cmd3 */
-        std::string                 uri_cmd2;       /* Parsed command2 from the url eg /camid/cmd1/cmd2/cmd3 */
-        std::string                 uri_cmd3;       /* Parsed command3 from the url eg /camid/cmd1/cmd2/cmd3 */
+    class cls_webu {
+        public:
+            cls_webu(cls_app *p_app);
+            ~cls_webu();
 
-        std::string                 clientip;       /* IP of the connecting client */
-        std::string                 hostfull;       /* Full http name for host with port number */
-
-        char                        *auth_opaque;   /* Opaque string for digest authentication*/
-        char                        *auth_realm;    /* Realm string for digest authentication*/
-        char                        *auth_user;     /* Parsed user from config authentication string*/
-        char                        *auth_pass;     /* Parsed password from config authentication string*/
-        int                         authenticated;  /* Boolean for whether authentication has been passed */
-
-        std::string                 resp_page;      /* The response that will be sent */
-        unsigned char               *resp_image;    /* Response image to provide to user */
-        int                         resp_type;      /* indicator for the type of response to provide. */
-        size_t                      resp_size;      /* The allocated size of the response */
-        size_t                      resp_used;      /* The amount of the response page used */
-        size_t                      aviobuf_sz;     /* The size of the mpegts avio buffer */
-
-        ctx_file_info               wfile;
-        int64_t                     file_cnt;
-        int                         start_cnt;
-        cls_channel                 *chitm;
-        int                         channel_indx;   /* Index number of the channel */
-        int                         channel_id;     /* channel id number requested */
-
-        int64_t                     msec_cnt;
-        AVPacket                    *pkt;
-        int                         pkt_index;
-        int64_t                     pkt_idnbr;
-        int64_t                     pkt_start_pts;
-        AVRational                  pkt_timebase;
-        int64_t                     pkt_file_cnt;
-        bool                        pkt_key;
-
-        enum WEBUI_CNCT             cnct_type;      /* Type of connection we are processing */
-        enum WEBUI_METHOD           cnct_method;    /* Connection method.  Get or Post */
-
-        uint64_t                    stream_pos;     /* Stream position of sent image */
-        int                         stream_fps;     /* Stream rate per second */
-        struct timespec             time_last;      /* Keep track of processing time for stream thread*/
-        int                         mhd_first;      /* Boolean for whether it is the first connection*/
-        struct MHD_Connection       *connection;    /* The MHD connection value from the client */
+            bool        wb_running;
+            bool        wb_finish;
+            ctx_params  headers;
+            char        digest_rand[12];
+            struct MHD_Daemon               *daemon;
+            std::list<ctx_webu_clients>      clients;
+        private:
+            cls_app *c_app;
+            void mhd_features_basic();
+            void mhd_features_digest();
+            void mhd_features_ipv6(ctx_mhdstart *mhdst);
+            void mhd_features_tls(ctx_mhdstart *mhdst);
+            void mhd_features(ctx_mhdstart *mhdst);
+            void mhd_loadfile(std::string fname, std::string &filestr);
+            void mhd_checktls(ctx_mhdstart *mhdst);
+            void mhd_opts_init(ctx_mhdstart *mhdst);
+            void mhd_opts_deinit(ctx_mhdstart *mhdst);
+            void mhd_opts_localhost(ctx_mhdstart *mhdst);
+            void mhd_opts_digest(ctx_mhdstart *mhdst);
+            void mhd_opts_tls(ctx_mhdstart *mhdst);
+            void mhd_opts(ctx_mhdstart *mhdst);
+            void mhd_flags(ctx_mhdstart *mhdst);
     };
-
-    void webu_init();
-    void webu_deinit();
 
 #endif /* _INCLUDE_WEBU_HPP_ */

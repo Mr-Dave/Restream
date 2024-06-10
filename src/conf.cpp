@@ -24,6 +24,9 @@
 #include "infile.hpp"
 #include "pktarray.hpp"
 #include "webu.hpp"
+#include "webu_ans.hpp"
+#include "webu_mpegts.hpp"
+
 
 void cls_config::parm_set_bool(bool &parm_dest, std::string &parm_in)
 {

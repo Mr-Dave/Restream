@@ -15,6 +15,7 @@ restream_SOURCES = \
 	infile.hpp       infile.cpp \
 	pktarray.hpp     pktarray.cpp \
 	webu.hpp         webu.cpp \
+	webu_ans.hpp     webu_ans.cpp \
 	webu_mpegts.hpp  webu_mpegts.cpp
 
 ###################################################################

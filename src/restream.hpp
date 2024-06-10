@@ -67,6 +67,9 @@
     class cls_channel;
     class cls_infile;
     class cls_pktarray;
+    class cls_webu;
+    class cls_webua;
+    class cls_webuts;
 
     extern cls_app *app;
 
@@ -178,15 +181,10 @@
 
             cls_config  *conf;
             cls_log     *log;
+            cls_webu    *webu;
             std::vector<cls_channel*>   channels;
 
             int         ch_count;
-            int         webcontrol_running;
-            int         webcontrol_finish;
-            ctx_params  webcontrol_headers;
-            char        webcontrol_digest_rand[12];
-            struct MHD_Daemon               *webcontrol_daemon;
-            std::list<ctx_webu_clients>      webcontrol_clients;
 
             void channels_start();
             void channels_wait();
