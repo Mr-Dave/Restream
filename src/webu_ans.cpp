@@ -657,8 +657,6 @@ mhdrslt cls_webua::answer(struct MHD_Connection *p_connection)
         return MHD_NO;
     }
 
-    get_hostname();
-
     if (authenticated == false) {
         retcd = mhd_auth();
         if (authenticated == false) {
@@ -666,13 +664,15 @@ mhdrslt cls_webua::answer(struct MHD_Connection *p_connection)
         }
     }
 
-    client_connect();
-
     if (mhd_first) {
         mhd_first = false;
         cnct_method = WEBUA_METHOD_GET;
         return MHD_YES;
     }
+
+    get_hostname();
+
+    client_connect();
 
     retcd = answer_get();
 
