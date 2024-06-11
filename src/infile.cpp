@@ -868,6 +868,8 @@ int cls_infile::encoder_init_audio()
     stream->time_base.num = 1;
     av_channel_layout_default(&stream->codecpar->ch_layout
         , dec_ctx->ch_layout.nb_channels);
+    av_channel_layout_copy(&stream->codecpar->ch_layout
+        , &dec_ctx->ch_layout);
 
     if (dec_ctx->bit_rate == 0) {
         enc_ctx->bit_rate = dec_ctx->sample_rate * 10;
@@ -881,6 +883,8 @@ int cls_infile::encoder_init_audio()
     enc_ctx->time_base.den  = dec_ctx->sample_rate;
     av_channel_layout_default(&enc_ctx->ch_layout
         , dec_ctx->ch_layout.nb_channels);
+    av_channel_layout_copy(&enc_ctx->ch_layout
+        , &dec_ctx->ch_layout);
 
     retcd = avcodec_open2(enc_ctx, encoder, &opts);
     if (retcd < 0) {
