@@ -59,7 +59,7 @@ void ff_log(void *var1, int errnbr, const char *fmt, va_list vlist)
     fflvl = ((app->log->log_fflevel -2) * 8);
 
     if (errnbr < fflvl) {
-        LOG_MSG(INF, NO_ERRNO,"ffmpeg message: %s",buff );
+        LOG_MSG(INF, NO_ERRNO,"%s",buff );
     }
 }
 
