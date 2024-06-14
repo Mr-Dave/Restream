@@ -80,7 +80,7 @@ void cls_log::write_flood(int loglvl)
         fflush(log_file_ptr);
 
     } else {    /* The syslog level values are one less*/
-        syslog(loglvl, "%s", flood_repeats);
+        syslog(loglvl-1, "%s", flood_repeats);
         fputs(flood_repeats, stderr);
         fflush(stderr);
     }
