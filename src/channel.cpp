@@ -180,7 +180,7 @@ void cls_channel::guide_write_xml(std::string &xml)
 
 void cls_channel::guide_process()
 {
-    struct stat sdir;
+    struct stat sfile;
     struct  sockaddr_un addr;
     ssize_t retcd;
     int fd, rc;
@@ -191,10 +191,11 @@ void cls_channel::guide_process()
     }
 
     /* Determine if we are on the test machine */
-    rc = stat("/home/hts/.hts/tvheadend", &sdir);
+    rc = stat(app->conf->epg_socket.c_str(), &sfile);
     if(rc < 0) {
         LOG_MSG(NTC, NO_ERRNO
-            , "Requested tvh guide but the required directory does not exist.");
+            , "Requested tvh guide but the required directory does not exist:> %s <"
+            , app->conf->epg_socket.c_str());
         LOG_MSG(NTC, NO_ERRNO
             , "Printing tvh guide xml to log.");
         guide_write_xml(xml);
@@ -209,10 +210,11 @@ void cls_channel::guide_process()
 
     memset(&addr,'\0', sizeof(addr));
     addr.sun_family = AF_UNIX;
-    snprintf(addr.sun_path,108,"%s","/home/hts/.hts/tvheadend/epggrab/xmltv.sock");
+    snprintf(addr.sun_path,108,"%s", app->conf->epg_socket.c_str());
     rc = connect(fd, (struct sockaddr*)&addr, sizeof(addr));
     if (rc == -1) {
-        LOG_MSG(NTC, NO_ERRNO, "Error connecting socket for the guide");
+        LOG_MSG(NTC, NO_ERRNO, "Error connecting socket for the guide: %s"
+            , app->conf->epg_socket.c_str());
         close(fd);
         return;
     }

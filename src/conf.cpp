@@ -89,6 +89,30 @@ void cls_config::edit_log_level(std::string &parm, enum PARM_ACT pact)
     return;
 }
 
+void cls_config::edit_epg_socket(std::string &parm, enum PARM_ACT pact)
+{
+    if (pact == PARM_ACT_DFLT) {
+        epg_socket = "/var/lib/tvheadend/epggrab/xmltv.sock";
+    } else if (pact == PARM_ACT_SET) {
+        if (parm == "/") {
+            LOG_MSG(NTC, NO_ERRNO, "Invalid epg_socket");
+        } else if (parm.length() >= 1) {
+            if (parm.substr(0, 1) != "/") {
+                LOG_MSG(NTC, NO_ERRNO
+                    , "Invalid epg_socket:  Must start with a / ");
+                epg_socket = "/" + parm;
+            } else {
+                epg_socket = parm;
+            }
+        } else {
+            epg_socket = parm;
+        }
+    } else if (pact == PARM_ACT_GET) {
+        parm = epg_socket;
+    }
+    return;
+}
+
 void cls_config::edit_log_fflevel(std::string &parm, enum PARM_ACT pact)
 {
     int parm_in;
@@ -408,6 +432,7 @@ void cls_config::edit_cat00(std::string parm_nm
     if (parm_nm == "log_file") {            edit_log_file(parm_val, pact);
     } else if (parm_nm == "log_level") {    edit_log_level(parm_val, pact);
     } else if (parm_nm == "log_fflevel") {  edit_log_fflevel(parm_val, pact);
+    } else if (parm_nm == "epg_socket") {   edit_epg_socket(parm_val, pact);
     }
 }
 
@@ -753,7 +778,8 @@ void cls_config::parms_init()
 
     parms_add("log_file",                  PARM_TYP_STRING, PARM_CAT_00, WEBUI_LEVEL_ADVANCED);
     parms_add("log_level",                 PARM_TYP_LIST,   PARM_CAT_00, WEBUI_LEVEL_LIMITED);
-    parms_add("log_fflevel",               PARM_TYP_LIST,   PARM_CAT_00, WEBUI_LEVEL_LIMITED);
+    parms_add("log_fflevel",               PARM_TYP_INT,    PARM_CAT_00, WEBUI_LEVEL_LIMITED);
+    parms_add("epg_socket",                PARM_TYP_STRING, PARM_CAT_00, WEBUI_LEVEL_LIMITED);
     parms_add("webcontrol_port",           PARM_TYP_INT,    PARM_CAT_01, WEBUI_LEVEL_ADVANCED);
     parms_add("webcontrol_port2",          PARM_TYP_INT,    PARM_CAT_01, WEBUI_LEVEL_ADVANCED);
     parms_add("webcontrol_base_path",      PARM_TYP_STRING, PARM_CAT_01, WEBUI_LEVEL_ADVANCED);
