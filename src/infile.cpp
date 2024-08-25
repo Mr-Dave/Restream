@@ -190,7 +190,7 @@ int cls_infile::decoder_init(std::string fnm)
             lang = av_dict_get(
                 ifile.fmt_ctx->streams[indx]->metadata
                 , "language", NULL,0);
-            if (lang->value != nullptr) {
+            if (lang != nullptr) {
                 if (mystrne(lang->value, app->conf->language_code.c_str())) {
                     return 0;
                 }
