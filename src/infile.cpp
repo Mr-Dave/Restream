@@ -190,14 +190,14 @@ int cls_infile::decoder_init(std::string fnm)
             lang = av_dict_get(
                 ifile.fmt_ctx->streams[indx]->metadata
                 , "language", NULL,0);
-            LOG_MSG(NTC, NO_ERRNO
-                , "Ch%s: Language: %s, index %d"
-                , ch_nbr.c_str(), lang->value, indx);
-            if (mystreq(lang->value,app->conf->language_code.c_str())) {
-                ifile.audio.index = indx;
-                if (decoder_init_audio() != 0) {
-                    return -1;
+            if (lang->value != nullptr) {
+                if (mystrne(lang->value, app->conf->language_code.c_str())) {
+                    return 0;
                 }
+            }
+            ifile.audio.index = indx;
+            if (decoder_init_audio() != 0) {
+                return -1;
             }
         }
     }
