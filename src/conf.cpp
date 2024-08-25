@@ -113,6 +113,18 @@ void cls_config::edit_epg_socket(std::string &parm, enum PARM_ACT pact)
     return;
 }
 
+void cls_config::edit_language_code(std::string &parm, enum PARM_ACT pact)
+{
+    if (pact == PARM_ACT_DFLT) {
+        language_code = "eng";
+    } else if (pact == PARM_ACT_SET) {
+        language_code = parm;
+    } else if (pact == PARM_ACT_GET) {
+        parm = language_code;
+    }
+    return;
+}
+
 void cls_config::edit_log_fflevel(std::string &parm, enum PARM_ACT pact)
 {
     int parm_in;
@@ -433,6 +445,7 @@ void cls_config::edit_cat00(std::string parm_nm
     } else if (parm_nm == "log_level") {    edit_log_level(parm_val, pact);
     } else if (parm_nm == "log_fflevel") {  edit_log_fflevel(parm_val, pact);
     } else if (parm_nm == "epg_socket") {   edit_epg_socket(parm_val, pact);
+    } else if (parm_nm == "language_code"){ edit_language_code(parm_val, pact);
     }
 }
 
@@ -780,6 +793,7 @@ void cls_config::parms_init()
     parms_add("log_level",                 PARM_TYP_LIST,   PARM_CAT_00, WEBUI_LEVEL_LIMITED);
     parms_add("log_fflevel",               PARM_TYP_INT,    PARM_CAT_00, WEBUI_LEVEL_LIMITED);
     parms_add("epg_socket",                PARM_TYP_STRING, PARM_CAT_00, WEBUI_LEVEL_LIMITED);
+    parms_add("language_code",             PARM_TYP_STRING, PARM_CAT_00, WEBUI_LEVEL_LIMITED);
     parms_add("webcontrol_port",           PARM_TYP_INT,    PARM_CAT_01, WEBUI_LEVEL_ADVANCED);
     parms_add("webcontrol_port2",          PARM_TYP_INT,    PARM_CAT_01, WEBUI_LEVEL_ADVANCED);
     parms_add("webcontrol_base_path",      PARM_TYP_STRING, PARM_CAT_01, WEBUI_LEVEL_ADVANCED);

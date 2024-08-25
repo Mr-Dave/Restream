@@ -153,6 +153,7 @@ int cls_infile::decoder_init(std::string fnm)
     int retcd, indx;
     char errstr[128];
     AVMediaType strm_typ;
+    AVDictionaryEntry *lang;
 
     LOG_MSG(NTC, NO_ERRNO
         , "Ch%s: Opening file '%s'"
@@ -186,9 +187,17 @@ int cls_infile::decoder_init(std::string fnm)
             }
         } else if ((strm_typ == AVMEDIA_TYPE_AUDIO) &&
             (ifile.audio.index == -1)) {
-            ifile.audio.index = indx;
-            if (decoder_init_audio() != 0) {
-                return -1;
+            lang = av_dict_get(
+                ifile.fmt_ctx->streams[indx]->metadata
+                , "language", NULL,0);
+            LOG_MSG(NTC, NO_ERRNO
+                , "Ch%s: Language: %s, index %d"
+                , ch_nbr.c_str(), lang->value, indx);
+            if (mystreq(lang->value,app->conf->language_code.c_str())) {
+                ifile.audio.index = indx;
+                if (decoder_init_audio() != 0) {
+                    return -1;
+                }
             }
         }
     }
@@ -483,7 +492,7 @@ void cls_infile::encoder_send()
     if (frame == nullptr) {
         return;
     }
-
+    retcd = 0;
     if (pkt_in->stream_index == ifile.video.index) {
         if  (frame->pts != AV_NOPTS_VALUE) {
             if (frame->pts <= ofile.video.last_pts) {
@@ -500,7 +509,7 @@ void cls_infile::encoder_send()
         }
         frame->quality = ofile.video.codec_ctx->global_quality;
         retcd = avcodec_send_frame(ofile.video.codec_ctx, frame);
-    } else {
+    } else if (pkt_in->stream_index == ifile.audio.index) {
         if (ifile.audio.codec_ctx->codec_id == AV_CODEC_ID_AAC) {
             retcd = encoder_buffer_audio();
             if (retcd < 0) {

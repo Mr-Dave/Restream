@@ -26,6 +26,7 @@
             int             log_level;
             int             log_fflevel;
             std::string     epg_socket;
+            std::string     language_code;
             int             webcontrol_port;
             int             webcontrol_port2;
             std::string     webcontrol_base_path;
@@ -58,6 +59,7 @@
             void edit_log_level(std::string &parm, enum PARM_ACT pact);
             void edit_log_fflevel(std::string &parm, enum PARM_ACT pact);
             void edit_epg_socket(std::string &parm, enum PARM_ACT pact);
+            void edit_language_code(std::string &parm, enum PARM_ACT pact);
             void edit_webcontrol_port(std::string &parm, enum PARM_ACT pact);
             void edit_webcontrol_base_path(std::string &parm, enum PARM_ACT pact);
             void edit_webcontrol_ipv6(std::string &parm, enum PARM_ACT pact);
